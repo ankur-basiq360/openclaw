@@ -96,14 +96,21 @@ function verifyTotp(secret: string, token: string, window = 1): boolean {
 }
 
 // ============================================================================
-// Telegram MFA
+// Telegram MFA with Inline Buttons
 // ============================================================================
+
+/** Generate a unique request ID for callback routing */
+function generateRequestId(): string {
+  return `mfa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
 
 async function sendTelegramApprovalRequest(
   config: TelegramMfaConfig,
   secretId: string,
   groupName: string,
-): Promise<{ ok: boolean; messageId?: number; error?: string }> {
+): Promise<{ ok: boolean; messageId?: number; requestId?: string; error?: string }> {
+  const requestId = generateRequestId();
+
   const message = [
     "🔐 <b>Tier 3 Secret Access Request</b>",
     "",
@@ -111,10 +118,18 @@ async function sendTelegramApprovalRequest(
     `<b>Group:</b> ${groupName}`,
     `<b>Requested by:</b> OpenClaw`,
     "",
-    "⏳ Reply within 60 seconds:",
-    "• <code>YES &lt;TOTP&gt;</code> to approve",
-    "• <code>NO</code> to deny",
+    "⏳ Respond within 60 seconds",
   ].join("\n");
+
+  // Inline keyboard with Approve/Deny buttons
+  const inlineKeyboard = {
+    inline_keyboard: [
+      [
+        { text: "✅ Approve", callback_data: `${requestId}:approve` },
+        { text: "❌ Deny", callback_data: `${requestId}:deny` },
+      ],
+    ],
+  };
 
   try {
     const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
@@ -124,6 +139,7 @@ async function sendTelegramApprovalRequest(
         chat_id: config.chatId,
         text: message,
         parse_mode: "HTML",
+        reply_markup: inlineKeyboard,
       }),
     });
 
@@ -137,15 +153,68 @@ async function sendTelegramApprovalRequest(
       return { ok: false, error: data.description || "Unknown error" };
     }
 
-    return { ok: true, messageId: data.result?.message_id };
+    return { ok: true, messageId: data.result?.message_id, requestId };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function answerCallbackQuery(
+  botToken: string,
+  callbackQueryId: string,
+  text: string,
+): Promise<void> {
+  try {
+    await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        text,
+      }),
+    });
+  } catch {
+    // Best effort
+  }
+}
+
+async function editMessageAfterApproval(
+  botToken: string,
+  chatId: string,
+  messageId: number,
+  approved: boolean,
+  secretId: string,
+): Promise<void> {
+  const status = approved ? "✅ APPROVED" : "❌ DENIED";
+  const text = [
+    "🔐 <b>Tier 3 Secret Access Request</b>",
+    "",
+    `<b>Secret:</b> <code>${secretId}</code>`,
+    `<b>Status:</b> ${status}`,
+    `<b>Time:</b> ${new Date().toLocaleTimeString()}`,
+  ].join("\n");
+
+  try {
+    await fetch(`https://api.telegram.org/bot${botToken}/editMessageText`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        parse_mode: "HTML",
+      }),
+    });
+  } catch {
+    // Best effort
   }
 }
 
 async function pollTelegramApproval(
   config: TelegramMfaConfig,
   requestMessageId: number,
+  requestId: string,
+  secretId: string,
 ): Promise<{ approved: boolean; error?: string }> {
   const timeoutMs = config.timeoutMs ?? 60000;
   const startTime = Date.now();
@@ -155,7 +224,7 @@ async function pollTelegramApproval(
     try {
       const params = new URLSearchParams({
         timeout: "10",
-        allowed_updates: JSON.stringify(["message"]),
+        allowed_updates: JSON.stringify(["callback_query"]),
       });
       if (lastUpdateId) {
         params.set("offset", lastUpdateId.toString());
@@ -168,10 +237,11 @@ async function pollTelegramApproval(
         ok: boolean;
         result?: Array<{
           update_id: number;
-          message?: {
-            chat: { id: number };
-            text?: string;
-            reply_to_message?: { message_id: number };
+          callback_query?: {
+            id: string;
+            from: { id: number };
+            message?: { chat: { id: number }; message_id: number };
+            data?: string;
           };
         }>;
       };
@@ -181,30 +251,35 @@ async function pollTelegramApproval(
       for (const update of data.result || []) {
         lastUpdateId = update.update_id + 1;
 
-        const msg = update.message;
-        if (!msg?.text) continue;
-        if (String(msg.chat.id) !== config.chatId) continue;
+        const callback = update.callback_query;
+        if (!callback?.data) continue;
+        if (String(callback.message?.chat.id) !== config.chatId) continue;
 
-        // Check if reply to our request or direct response within 10s
-        const isReply = msg.reply_to_message?.message_id === requestMessageId;
-        const isDirectResponse = !msg.reply_to_message && Date.now() - startTime < 10000;
+        // Check if this callback is for our request
+        if (callback.data.startsWith(requestId + ":")) {
+          const action = callback.data.split(":")[1];
 
-        if (isReply || isDirectResponse) {
-          const text = msg.text.trim().toUpperCase();
-
-          // Denial
-          if (text === "NO" || text === "DENY" || text === "REJECT") {
+          if (action === "approve") {
+            // Acknowledge the button press
+            await answerCallbackQuery(config.botToken, callback.id, "✅ Approved!");
+            await editMessageAfterApproval(
+              config.botToken,
+              config.chatId,
+              requestMessageId,
+              true,
+              secretId,
+            );
+            return { approved: true };
+          } else if (action === "deny") {
+            await answerCallbackQuery(config.botToken, callback.id, "❌ Denied");
+            await editMessageAfterApproval(
+              config.botToken,
+              config.chatId,
+              requestMessageId,
+              false,
+              secretId,
+            );
             return { approved: false, error: "Request denied by user" };
-          }
-
-          // Approval with TOTP
-          const match = text.match(/^YES\s+(\d{6})$/);
-          if (match) {
-            const totp = match[1];
-            if (verifyTotp(config.totpSecret, totp)) {
-              return { approved: true };
-            }
-            return { approved: false, error: "Invalid TOTP code" };
           }
         }
       }
@@ -478,13 +553,18 @@ export class GaneshBackend implements SecretsBackend {
     // Send approval request
     const sendResult = await sendTelegramApprovalRequest(mfaConfig, secretPath, groupName);
 
-    if (!sendResult.ok || !sendResult.messageId) {
+    if (!sendResult.ok || !sendResult.messageId || !sendResult.requestId) {
       console.error(`[secrets:ganesh] Failed to send MFA request: ${sendResult.error}`);
       return null;
     }
 
-    // Wait for approval
-    const approval = await pollTelegramApproval(mfaConfig, sendResult.messageId);
+    // Wait for approval (polling for callback_query from inline buttons)
+    const approval = await pollTelegramApproval(
+      mfaConfig,
+      sendResult.messageId,
+      sendResult.requestId,
+      secretPath,
+    );
 
     if (!approval.approved) {
       console.error(`[secrets:ganesh] MFA denied: ${approval.error}`);
