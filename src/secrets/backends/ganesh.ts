@@ -178,6 +178,93 @@ async function answerCallbackQuery(
   }
 }
 
+async function editMessageText(
+  botToken: string,
+  chatId: string,
+  messageId: number,
+  text: string,
+): Promise<void> {
+  try {
+    await fetch(`https://api.telegram.org/bot${botToken}/editMessageText`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        parse_mode: "HTML",
+      }),
+    });
+  } catch {
+    // Best effort
+  }
+}
+
+async function pollForTotp(
+  config: TelegramMfaConfig,
+  afterMessageId: number,
+  startTime: number,
+  timeoutMs: number,
+): Promise<{ valid: boolean; error?: string }> {
+  let lastUpdateId: number | undefined;
+
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      const params = new URLSearchParams({
+        timeout: "5",
+        allowed_updates: JSON.stringify(["message"]),
+      });
+      if (lastUpdateId) {
+        params.set("offset", lastUpdateId.toString());
+      }
+
+      const response = await fetch(
+        `https://api.telegram.org/bot${config.botToken}/getUpdates?${params}`,
+      );
+      const data = (await response.json()) as {
+        ok: boolean;
+        result?: Array<{
+          update_id: number;
+          message?: {
+            message_id: number;
+            chat: { id: number };
+            text?: string;
+          };
+        }>;
+      };
+
+      if (!data.ok) continue;
+
+      for (const update of data.result || []) {
+        lastUpdateId = update.update_id + 1;
+
+        const msg = update.message;
+        if (!msg?.text) continue;
+        if (String(msg.chat.id) !== config.chatId) continue;
+        // Only accept messages after our TOTP prompt
+        if (msg.message_id <= afterMessageId) continue;
+
+        // Check if it's a 6-digit code
+        const code = msg.text.trim();
+        if (/^\d{6}$/.test(code)) {
+          // Validate TOTP
+          if (verifyTotp(config.totpSecret, code)) {
+            return { valid: true };
+          } else {
+            return { valid: false, error: "Invalid TOTP code" };
+          }
+        }
+      }
+    } catch {
+      // Network error, retry
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  return { valid: false, error: "TOTP entry timed out" };
+}
+
 async function editMessageAfterApproval(
   botToken: string,
   chatId: string,
@@ -261,15 +348,50 @@ async function pollTelegramApproval(
 
           if (action === "approve") {
             // Acknowledge the button press
-            await answerCallbackQuery(config.botToken, callback.id, "✅ Approved!");
-            await editMessageAfterApproval(
+            await answerCallbackQuery(config.botToken, callback.id, "Enter TOTP to confirm");
+
+            // Update message to show awaiting TOTP
+            await editMessageText(
               config.botToken,
               config.chatId,
               requestMessageId,
-              true,
-              secretId,
+              [
+                "🔐 <b>Tier 3 Secret Access Request</b>",
+                "",
+                `<b>Secret:</b> <code>${secretId}</code>`,
+                `<b>Status:</b> ⏳ Awaiting TOTP...`,
+                "",
+                "📱 Enter your 6-digit TOTP code from your authenticator app:",
+              ].join("\n"),
             );
-            return { approved: true };
+
+            // Now poll for TOTP text message
+            const totpResult = await pollForTotp(
+              config,
+              requestMessageId,
+              Date.now(),
+              30000, // 30 second timeout for TOTP entry
+            );
+
+            if (totpResult.valid) {
+              await editMessageAfterApproval(
+                config.botToken,
+                config.chatId,
+                requestMessageId,
+                true,
+                secretId,
+              );
+              return { approved: true };
+            } else {
+              await editMessageAfterApproval(
+                config.botToken,
+                config.chatId,
+                requestMessageId,
+                false,
+                secretId,
+              );
+              return { approved: false, error: totpResult.error || "TOTP validation failed" };
+            }
           } else if (action === "deny") {
             await answerCallbackQuery(config.botToken, callback.id, "❌ Denied");
             await editMessageAfterApproval(
