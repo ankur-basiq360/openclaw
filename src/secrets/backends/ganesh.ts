@@ -27,6 +27,7 @@ const execAsync = promisify(exec);
 // ============================================================================
 
 type SecretTier = 1 | 2 | 3;
+type VaultMode = "development" | "production";
 
 interface SecretGroup {
   id: string;
@@ -35,10 +36,22 @@ interface SecretGroup {
   secrets: string[];
 }
 
+interface ModeOverride {
+  pattern: string;
+  tier: SecretTier;
+}
+
+interface ModeConfig {
+  overrides: ModeOverride[];
+  requiresMfaToEnable: boolean;
+}
+
 interface VaultManifest {
   version: number;
   groups: SecretGroup[];
   defaultTier: SecretTier;
+  mode?: VaultMode;
+  modes?: Record<VaultMode, ModeConfig>;
 }
 
 interface TelegramMfaConfig {
@@ -437,10 +450,23 @@ export class GaneshBackend implements SecretsBackend {
 
   /**
    * Get the tier for a secret from the manifest
+   * Respects mode overrides if a mode is set
    */
   private getSecretTier(secretId: string): SecretTier {
     if (!this.manifest) return 1;
 
+    // Check for mode override first
+    const mode = this.manifest.mode;
+    if (mode && this.manifest.modes?.[mode]) {
+      const modeConfig = this.manifest.modes[mode];
+      for (const override of modeConfig.overrides) {
+        if (this.matchesPattern(secretId, override.pattern)) {
+          return override.tier;
+        }
+      }
+    }
+
+    // Fall back to group tier
     for (const group of this.manifest.groups) {
       if (group.secrets.includes(secretId)) {
         return group.tier;
@@ -448,6 +474,28 @@ export class GaneshBackend implements SecretsBackend {
     }
 
     return this.manifest.defaultTier;
+  }
+
+  /**
+   * Check if a secret ID matches a pattern (exact or glob)
+   */
+  private matchesPattern(secretId: string, pattern: string): boolean {
+    // Exact match
+    if (pattern === secretId) return true;
+
+    // Glob pattern with * at end (e.g., "anthropic/*")
+    if (pattern.endsWith("/*")) {
+      const prefix = pattern.slice(0, -2);
+      return secretId.startsWith(prefix + "/");
+    }
+
+    // Glob pattern with * (e.g., "*/api-key")
+    if (pattern.includes("*")) {
+      const regex = new RegExp("^" + pattern.replace(/\*/g, ".*") + "$");
+      return regex.test(secretId);
+    }
+
+    return false;
   }
 
   /**
