@@ -1,5 +1,5 @@
 import type { OpenClawConfig } from "../config/config.js";
-import { resolveTelegramAccount } from "./accounts.js";
+import { resolveTelegramAccount, resolveTelegramAccountAsync } from "./accounts.js";
 
 export type TelegramReactionLevel = "off" | "ack" | "minimal" | "extensive";
 
@@ -13,19 +13,7 @@ export type ResolvedReactionLevel = {
   agentReactionGuidance?: "minimal" | "extensive";
 };
 
-/**
- * Resolve the effective reaction level and its implications.
- */
-export function resolveTelegramReactionLevel(params: {
-  cfg: OpenClawConfig;
-  accountId?: string;
-}): ResolvedReactionLevel {
-  const account = resolveTelegramAccount({
-    cfg: params.cfg,
-    accountId: params.accountId,
-  });
-  const level = (account.config.reactionLevel ?? "minimal") as TelegramReactionLevel;
-
+function buildReactionLevelResult(level: TelegramReactionLevel): ResolvedReactionLevel {
   switch (level) {
     case "off":
       return {
@@ -61,4 +49,34 @@ export function resolveTelegramReactionLevel(params: {
         agentReactionsEnabled: false,
       };
   }
+}
+
+/**
+ * Resolve the effective reaction level and its implications (sync version).
+ */
+export function resolveTelegramReactionLevel(params: {
+  cfg: OpenClawConfig;
+  accountId?: string;
+}): ResolvedReactionLevel {
+  const account = resolveTelegramAccount({
+    cfg: params.cfg,
+    accountId: params.accountId,
+  });
+  const level = (account.config.reactionLevel ?? "minimal") as TelegramReactionLevel;
+  return buildReactionLevelResult(level);
+}
+
+/**
+ * Resolve the effective reaction level and its implications (async version with secret ref support).
+ */
+export async function resolveTelegramReactionLevelAsync(params: {
+  cfg: OpenClawConfig;
+  accountId?: string;
+}): Promise<ResolvedReactionLevel> {
+  const account = await resolveTelegramAccountAsync({
+    cfg: params.cfg,
+    accountId: params.accountId,
+  });
+  const level = (account.config.reactionLevel ?? "minimal") as TelegramReactionLevel;
+  return buildReactionLevelResult(level);
 }

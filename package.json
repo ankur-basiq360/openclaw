@@ -120,6 +120,7 @@
     "format:all": "pnpm format && pnpm format:swift",
     "format:fix": "oxfmt --write src test",
     "test": "node scripts/test-parallel.mjs",
+    "scan:secrets": "npx ts-node scripts/scan-secrets.ts",
     "test:watch": "vitest",
     "test:ui": "pnpm --dir ui test",
     "test:force": "node --import tsx scripts/test-force.ts",

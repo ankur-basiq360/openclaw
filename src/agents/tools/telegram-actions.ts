@@ -9,7 +9,7 @@ import {
   sendStickerTelegram,
 } from "../../telegram/send.js";
 import { getCacheStats, searchStickers } from "../../telegram/sticker-cache.js";
-import { resolveTelegramToken } from "../../telegram/token.js";
+import { resolveTelegramTokenAsync } from "../../telegram/token.js";
 import {
   resolveTelegramInlineButtonsScope,
   resolveTelegramTargetChatType,
@@ -101,14 +101,14 @@ export async function handleTelegramAction(
     const { emoji, remove, isEmpty } = readReactionParams(params, {
       removeErrorMessage: "Emoji is required to remove a Telegram reaction.",
     });
-    const token = resolveTelegramToken(cfg, { accountId }).token;
-    if (!token) {
+    const tokenResult = await resolveTelegramTokenAsync(cfg, { accountId });
+    if (!tokenResult.token) {
       throw new Error(
-        "Telegram bot token missing. Set TELEGRAM_BOT_TOKEN or channels.telegram.botToken.",
+        "Telegram bot token missing. Set TELEGRAM_BOT_TOKEN or channels.telegram.botToken/botTokenRef.",
       );
     }
     await reactMessageTelegram(chatId ?? "", messageId ?? 0, emoji ?? "", {
-      token,
+      token: tokenResult.token,
       remove,
       accountId: accountId ?? undefined,
     });
@@ -166,14 +166,14 @@ export async function handleTelegramAction(
       integer: true,
     });
     const quoteText = readStringParam(params, "quoteText");
-    const token = resolveTelegramToken(cfg, { accountId }).token;
-    if (!token) {
+    const tokenResult = await resolveTelegramTokenAsync(cfg, { accountId });
+    if (!tokenResult.token) {
       throw new Error(
-        "Telegram bot token missing. Set TELEGRAM_BOT_TOKEN or channels.telegram.botToken.",
+        "Telegram bot token missing. Set TELEGRAM_BOT_TOKEN or channels.telegram.botToken/botTokenRef.",
       );
     }
     const result = await sendMessageTelegram(to, content, {
-      token,
+      token: tokenResult.token,
       accountId: accountId ?? undefined,
       mediaUrl: mediaUrl || undefined,
       buttons,
@@ -201,14 +201,14 @@ export async function handleTelegramAction(
       required: true,
       integer: true,
     });
-    const token = resolveTelegramToken(cfg, { accountId }).token;
-    if (!token) {
+    const tokenResult = await resolveTelegramTokenAsync(cfg, { accountId });
+    if (!tokenResult.token) {
       throw new Error(
-        "Telegram bot token missing. Set TELEGRAM_BOT_TOKEN or channels.telegram.botToken.",
+        "Telegram bot token missing. Set TELEGRAM_BOT_TOKEN or channels.telegram.botToken/botTokenRef.",
       );
     }
     await deleteMessageTelegram(chatId ?? "", messageId ?? 0, {
-      token,
+      token: tokenResult.token,
       accountId: accountId ?? undefined,
     });
     return jsonResult({ ok: true, deleted: true });
@@ -241,14 +241,14 @@ export async function handleTelegramAction(
         );
       }
     }
-    const token = resolveTelegramToken(cfg, { accountId }).token;
-    if (!token) {
+    const tokenResult = await resolveTelegramTokenAsync(cfg, { accountId });
+    if (!tokenResult.token) {
       throw new Error(
-        "Telegram bot token missing. Set TELEGRAM_BOT_TOKEN or channels.telegram.botToken.",
+        "Telegram bot token missing. Set TELEGRAM_BOT_TOKEN or channels.telegram.botToken/botTokenRef.",
       );
     }
     const result = await editMessageTelegram(chatId ?? "", messageId ?? 0, content, {
-      token,
+      token: tokenResult.token,
       accountId: accountId ?? undefined,
       buttons,
     });
@@ -273,14 +273,14 @@ export async function handleTelegramAction(
     const messageThreadId = readNumberParam(params, "messageThreadId", {
       integer: true,
     });
-    const token = resolveTelegramToken(cfg, { accountId }).token;
-    if (!token) {
+    const tokenResult = await resolveTelegramTokenAsync(cfg, { accountId });
+    if (!tokenResult.token) {
       throw new Error(
-        "Telegram bot token missing. Set TELEGRAM_BOT_TOKEN or channels.telegram.botToken.",
+        "Telegram bot token missing. Set TELEGRAM_BOT_TOKEN or channels.telegram.botToken/botTokenRef.",
       );
     }
     const result = await sendStickerTelegram(to, fileId, {
-      token,
+      token: tokenResult.token,
       accountId: accountId ?? undefined,
       replyToMessageId: replyToMessageId ?? undefined,
       messageThreadId: messageThreadId ?? undefined,

@@ -1,6 +1,10 @@
 import type { OpenClawConfig } from "../config/config.js";
 import type { TelegramInlineButtonsScope } from "../config/types.telegram.js";
-import { listTelegramAccountIds, resolveTelegramAccount } from "./accounts.js";
+import {
+  listTelegramAccountIds,
+  resolveTelegramAccount,
+  resolveTelegramAccountAsync,
+} from "./accounts.js";
 import { parseTelegramTarget } from "./targets.js";
 
 const DEFAULT_INLINE_BUTTONS_SCOPE: TelegramInlineButtonsScope = "allowlist";
@@ -37,6 +41,7 @@ function resolveInlineButtonsScopeFromCapabilities(
   return DEFAULT_INLINE_BUTTONS_SCOPE;
 }
 
+/** Sync version (no secret ref support) */
 export function resolveTelegramInlineButtonsScope(params: {
   cfg: OpenClawConfig;
   accountId?: string | null;
@@ -45,6 +50,19 @@ export function resolveTelegramInlineButtonsScope(params: {
   return resolveInlineButtonsScopeFromCapabilities(account.config.capabilities);
 }
 
+/** Async version (supports secret refs) */
+export async function resolveTelegramInlineButtonsScopeAsync(params: {
+  cfg: OpenClawConfig;
+  accountId?: string | null;
+}): Promise<TelegramInlineButtonsScope> {
+  const account = await resolveTelegramAccountAsync({
+    cfg: params.cfg,
+    accountId: params.accountId,
+  });
+  return resolveInlineButtonsScopeFromCapabilities(account.config.capabilities);
+}
+
+/** Sync version (no secret ref support) */
 export function isTelegramInlineButtonsEnabled(params: {
   cfg: OpenClawConfig;
   accountId?: string | null;
@@ -59,6 +77,27 @@ export function isTelegramInlineButtonsEnabled(params: {
   return accountIds.some(
     (accountId) => resolveTelegramInlineButtonsScope({ cfg: params.cfg, accountId }) !== "off",
   );
+}
+
+/** Async version (supports secret refs) */
+export async function isTelegramInlineButtonsEnabledAsync(params: {
+  cfg: OpenClawConfig;
+  accountId?: string | null;
+}): Promise<boolean> {
+  if (params.accountId) {
+    return (await resolveTelegramInlineButtonsScopeAsync(params)) !== "off";
+  }
+  const accountIds = listTelegramAccountIds(params.cfg);
+  if (accountIds.length === 0) {
+    return (await resolveTelegramInlineButtonsScopeAsync(params)) !== "off";
+  }
+  const results = await Promise.all(
+    accountIds.map(
+      async (accountId) =>
+        (await resolveTelegramInlineButtonsScopeAsync({ cfg: params.cfg, accountId })) !== "off",
+    ),
+  );
+  return results.some(Boolean);
 }
 
 export function resolveTelegramTargetChatType(target: string): "direct" | "group" | "unknown" {

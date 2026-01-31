@@ -41,6 +41,11 @@ export type ChannelSetupAdapter = {
 export type ChannelConfigAdapter<ResolvedAccount> = {
   listAccountIds: (cfg: OpenClawConfig) => string[];
   resolveAccount: (cfg: OpenClawConfig, accountId?: string | null) => ResolvedAccount;
+  /** Async account resolution (supports secret refs). Used if provided. */
+  resolveAccountAsync?: (
+    cfg: OpenClawConfig,
+    accountId?: string | null,
+  ) => Promise<ResolvedAccount>;
   defaultAccountId?: (cfg: OpenClawConfig) => string;
   setAccountEnabled?: (params: {
     cfg: OpenClawConfig;

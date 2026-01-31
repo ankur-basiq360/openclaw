@@ -25,3 +25,4 @@ export * from "./types.js";
 export * from "./resolver.js";
 export * from "./auth-integration.js";
 export { PassBackend } from "./backends/pass.js";
+export { GaneshBackend } from "./backends/ganesh.js";

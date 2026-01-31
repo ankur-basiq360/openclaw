@@ -102,7 +102,10 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
     await Promise.all(
       accountIds.map(async (id) => {
         if (store.tasks.has(id)) return;
-        const account = plugin.config.resolveAccount(cfg, id);
+        // Use async resolution if available (supports secret refs like ganesh:)
+        const account = plugin.config.resolveAccountAsync
+          ? await plugin.config.resolveAccountAsync(cfg, id)
+          : plugin.config.resolveAccount(cfg, id);
         const enabled = plugin.config.isEnabled
           ? plugin.config.isEnabled(account, cfg)
           : isAccountEnabled(account);

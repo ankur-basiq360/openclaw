@@ -13,6 +13,7 @@ import type {
   SecretResolutionResult,
 } from "./types.js";
 import { PassBackend } from "./backends/pass.js";
+import { GaneshBackend } from "./backends/ganesh.js";
 
 // In-memory cache for resolved secrets (per-process lifetime)
 const secretsCache = new Map<string, { value: string; resolvedAt: number }>();
@@ -34,7 +35,7 @@ export function parseSecretRef(
   defaultBackend: SecretsBackendType = "file",
 ): SecretRef {
   // Check for backend prefix
-  const prefixMatch = ref.match(/^(pass|vault|keyring|env|file):(.+)$/);
+  const prefixMatch = ref.match(/^(pass|vault|keyring|env|file|ganesh):(.+)$/);
 
   let backend: SecretsBackendType;
   let pathWithField: string;
@@ -66,7 +67,7 @@ export function parseSecretRef(
 export function isSecretRef(value: unknown): value is string {
   if (typeof value !== "string") return false;
   // Must have a recognized prefix
-  return /^(pass|vault|keyring|env):/.test(value);
+  return /^(pass|vault|keyring|env|ganesh):/.test(value);
 }
 
 /**
@@ -76,6 +77,8 @@ export function createBackend(config: SecretsBackendConfig): SecretsBackend {
   switch (config.backend) {
     case "pass":
       return new PassBackend(config.pass);
+    case "ganesh":
+      return new GaneshBackend(config.ganesh);
     case "vault":
       // TODO: Implement VaultBackend
       throw new Error("Vault backend not yet implemented");

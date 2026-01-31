@@ -6,7 +6,7 @@ import { computeBackoff, sleepWithAbort } from "../infra/backoff.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { formatDurationMs } from "../infra/format-duration.js";
 import type { RuntimeEnv } from "../runtime.js";
-import { resolveTelegramAccount } from "./accounts.js";
+import { resolveTelegramAccountAsync } from "./accounts.js";
 import { resolveTelegramAllowedUpdates } from "./allowed-updates.js";
 import { createTelegramBot } from "./bot.js";
 import { isRecoverableTelegramNetworkError } from "./network-errors.js";
@@ -93,7 +93,7 @@ const isNetworkRelatedError = (err: unknown) => {
 
 export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
   const cfg = opts.config ?? loadConfig();
-  const account = resolveTelegramAccount({
+  const account = await resolveTelegramAccountAsync({
     cfg,
     accountId: opts.accountId,
   });
@@ -126,7 +126,7 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
     }
   };
 
-  const bot = createTelegramBot({
+  const bot = await createTelegramBot({
     token,
     runtime: opts.runtime,
     proxyFetch,

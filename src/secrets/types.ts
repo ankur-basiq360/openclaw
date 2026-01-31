@@ -5,7 +5,7 @@
  * OpenClaw to retrieve credentials from external secret managers.
  */
 
-export type SecretsBackendType = "pass" | "vault" | "keyring" | "env" | "file";
+export type SecretsBackendType = "pass" | "vault" | "keyring" | "env" | "file" | "ganesh";
 
 export type PassBackendConfig = {
   /** Custom password-store path (default: ~/.password-store) */
@@ -34,6 +34,13 @@ export type KeyringBackendConfig = {
   service?: string;
 };
 
+export type GaneshBackendConfig = {
+  /** Path to Ganesh vault directory (default: ~/.ganesh/vault) */
+  vaultPath?: string;
+  /** Auto-unlock on first access (default: true) */
+  autoUnlock?: boolean;
+};
+
 export type SecretsBackendConfig = {
   /** Backend type */
   backend: SecretsBackendType;
@@ -46,6 +53,9 @@ export type SecretsBackendConfig = {
 
   /** Keyring-specific options */
   keyring?: KeyringBackendConfig;
+
+  /** Ganesh Vault-specific options */
+  ganesh?: GaneshBackendConfig;
 };
 
 /**
