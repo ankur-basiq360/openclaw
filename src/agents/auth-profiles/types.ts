@@ -5,7 +5,14 @@ import type { OpenClawConfig } from "../../config/config.js";
 export type ApiKeyCredential = {
   type: "api_key";
   provider: string;
+  /** API key value. Required unless keyRef is provided. */
   key: string;
+  /**
+   * Secret reference for the API key (e.g., "pass:openclaw/anthropic-key").
+   * When set, the key is resolved at runtime from the configured secrets backend.
+   * Takes precedence over `key` if both are present.
+   */
+  keyRef?: string;
   email?: string;
 };
 
@@ -16,7 +23,14 @@ export type TokenCredential = {
    */
   type: "token";
   provider: string;
+  /** Token value. Required unless tokenRef is provided. */
   token: string;
+  /**
+   * Secret reference for the token (e.g., "pass:openclaw/token").
+   * When set, the token is resolved at runtime from the configured secrets backend.
+   * Takes precedence over `token` if both are present.
+   */
+  tokenRef?: string;
   /** Optional expiry timestamp (ms since epoch). */
   expires?: number;
   email?: string;

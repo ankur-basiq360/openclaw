@@ -28,7 +28,7 @@ import { withTelegramApiErrorLogging } from "./api-logging.js";
 import { resolveAgentRoute } from "../routing/resolve-route.js";
 import { resolveThreadSessionKeys } from "../routing/session-key.js";
 import type { RuntimeEnv } from "../runtime.js";
-import { resolveTelegramAccount } from "./accounts.js";
+import { resolveTelegramAccountAsync } from "./accounts.js";
 import {
   buildTelegramGroupPeerId,
   resolveTelegramForumThreadId,
@@ -106,7 +106,7 @@ export function getTelegramSequentialKey(ctx: {
   return "telegram:unknown";
 }
 
-export function createTelegramBot(opts: TelegramBotOptions) {
+export async function createTelegramBot(opts: TelegramBotOptions) {
   const runtime: RuntimeEnv = opts.runtime ?? {
     log: console.log,
     error: console.error,
@@ -115,7 +115,7 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     },
   };
   const cfg = opts.config ?? loadConfig();
-  const account = resolveTelegramAccount({
+  const account = await resolveTelegramAccountAsync({
     cfg,
     accountId: opts.accountId,
   });

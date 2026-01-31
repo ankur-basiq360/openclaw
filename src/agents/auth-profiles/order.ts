@@ -65,9 +65,9 @@ export function resolveAuthProfileOrder(params: {
         if (!oauthCompatible) return false;
       }
     }
-    if (cred.type === "api_key") return Boolean(cred.key?.trim());
+    if (cred.type === "api_key") return Boolean(cred.key?.trim() || cred.keyRef?.trim());
     if (cred.type === "token") {
-      if (!cred.token?.trim()) return false;
+      if (!cred.token?.trim() && !cred.tokenRef?.trim()) return false;
       if (
         typeof cred.expires === "number" &&
         Number.isFinite(cred.expires) &&

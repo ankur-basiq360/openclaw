@@ -16,6 +16,7 @@ import {
   PAIRING_APPROVED_MESSAGE,
   resolveDefaultTelegramAccountId,
   resolveTelegramAccount,
+  resolveTelegramAccountAsync,
   resolveTelegramGroupRequireMention,
   resolveTelegramGroupToolPolicy,
   setAccountEnabledInConfigSection,
@@ -86,6 +87,7 @@ export const telegramPlugin: ChannelPlugin<ResolvedTelegramAccount> = {
   config: {
     listAccountIds: (cfg) => listTelegramAccountIds(cfg),
     resolveAccount: (cfg, accountId) => resolveTelegramAccount({ cfg, accountId }),
+    resolveAccountAsync: (cfg, accountId) => resolveTelegramAccountAsync({ cfg, accountId }),
     defaultAccountId: (cfg) => resolveDefaultTelegramAccountId(cfg),
     setAccountEnabled: ({ cfg, accountId, enabled }) =>
       setAccountEnabledInConfigSection({

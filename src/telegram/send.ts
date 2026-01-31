@@ -18,7 +18,7 @@ import { createSubsystemLogger } from "../logging/subsystem.js";
 import { mediaKindFromMime } from "../media/constants.js";
 import { isGifMedia } from "../media/mime.js";
 import { loadWebMedia } from "../web/media.js";
-import { type ResolvedTelegramAccount, resolveTelegramAccount } from "./accounts.js";
+import { type ResolvedTelegramAccount, resolveTelegramAccountAsync } from "./accounts.js";
 import { resolveTelegramFetch } from "./fetch.js";
 import { makeProxyFetch } from "./proxy.js";
 import { renderTelegramHtmlText } from "./format.js";
@@ -181,7 +181,7 @@ export async function sendMessageTelegram(
   opts: TelegramSendOpts = {},
 ): Promise<TelegramSendResult> {
   const cfg = loadConfig();
-  const account = resolveTelegramAccount({
+  const account = await resolveTelegramAccountAsync({
     cfg,
     accountId: opts.accountId,
   });
@@ -439,7 +439,7 @@ export async function reactMessageTelegram(
   opts: TelegramReactionOpts = {},
 ): Promise<{ ok: true }> {
   const cfg = loadConfig();
-  const account = resolveTelegramAccount({
+  const account = await resolveTelegramAccountAsync({
     cfg,
     accountId: opts.accountId,
   });
@@ -492,7 +492,7 @@ export async function deleteMessageTelegram(
   opts: TelegramDeleteOpts = {},
 ): Promise<{ ok: true }> {
   const cfg = loadConfig();
-  const account = resolveTelegramAccount({
+  const account = await resolveTelegramAccountAsync({
     cfg,
     accountId: opts.accountId,
   });
@@ -541,7 +541,7 @@ export async function editMessageTelegram(
   opts: TelegramEditOpts = {},
 ): Promise<{ ok: true; messageId: string; chatId: string }> {
   const cfg = opts.cfg ?? loadConfig();
-  const account = resolveTelegramAccount({
+  const account = await resolveTelegramAccountAsync({
     cfg,
     accountId: opts.accountId,
   });
@@ -658,7 +658,7 @@ export async function sendStickerTelegram(
   }
 
   const cfg = loadConfig();
-  const account = resolveTelegramAccount({
+  const account = await resolveTelegramAccountAsync({
     cfg,
     accountId: opts.accountId,
   });
