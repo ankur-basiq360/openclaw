@@ -307,6 +307,7 @@ export {
   listTelegramAccountIds,
   resolveDefaultTelegramAccountId,
   resolveTelegramAccount,
+  resolveTelegramAccountAsync,
   type ResolvedTelegramAccount,
 } from "../telegram/accounts.js";
 export { telegramOnboardingAdapter } from "../channels/plugins/onboarding/telegram.js";

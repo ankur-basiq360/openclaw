@@ -8,6 +8,7 @@ import lockfile from "proper-lockfile";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { AuthProfileStore } from "./types.js";
 import { refreshQwenPortalCredentials } from "../../providers/qwen-portal-oauth.js";
+import { resolveApiKey, resolveToken } from "../../secrets/auth-integration.js";
 import { refreshChutesTokens } from "../chutes-oauth.js";
 import { AUTH_STORE_LOCK_OPTIONS, log } from "./constants.js";
 import { formatAuthDoctorHint } from "./doctor.js";
@@ -169,14 +170,16 @@ export async function resolveApiKeyForProfile(params: {
   }
 
   if (cred.type === "api_key") {
-    const key = cred.key?.trim();
-    if (!key) {
+    // Support secret refs: try keyRef first, fall back to key
+    const apiKey = await resolveApiKey(cred);
+    if (!apiKey) {
       return null;
     }
-    return { apiKey: key, provider: cred.provider, email: cred.email };
+    return { apiKey, provider: cred.provider, email: cred.email };
   }
   if (cred.type === "token") {
-    const token = cred.token?.trim();
+    // Support secret refs: try tokenRef first, fall back to token
+    const token = await resolveToken(cred);
     if (!token) {
       return null;
     }

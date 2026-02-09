@@ -5,7 +5,9 @@ import { type Message, type UserFromGetMe, ReactionTypeEmoji } from "@grammyjs/t
 import { Bot, webhookCallback } from "grammy";
 import type { OpenClawConfig, ReplyToMode } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
+import type { RuntimeEnv } from "../runtime.js";
 import type { TelegramContext } from "./bot/types.js";
+import type { TelegramContext, TelegramMessage } from "./bot/types.js";
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { resolveTextChunkLimit } from "../auto-reply/chunk.js";
 import { isControlCommandMessage } from "../auto-reply/command-detection.js";
@@ -27,7 +29,8 @@ import { enqueueSystemEvent } from "../infra/system-events.js";
 import { getChildLogger } from "../logging.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { resolveAgentRoute } from "../routing/resolve-route.js";
-import { resolveTelegramAccount } from "./accounts.js";
+import { resolveThreadSessionKeys } from "../routing/session-key.js";
+import { resolveTelegramAccountAsync } from "./accounts.js";
 import { withTelegramApiErrorLogging } from "./api-logging.js";
 import { registerTelegramHandlers } from "./bot-handlers.js";
 import { createTelegramMessageProcessor } from "./bot-message.js";
@@ -38,6 +41,11 @@ import {
   resolveTelegramUpdateId,
   type TelegramUpdateKeyContext,
 } from "./bot-updates.js";
+import {
+  buildTelegramGroupPeerId,
+  resolveTelegramForumThreadId,
+  resolveTelegramStreamMode,
+} from "./bot/helpers.js";
 import {
   buildTelegramGroupPeerId,
   buildTelegramParentPeer,
@@ -109,7 +117,7 @@ export function getTelegramSequentialKey(ctx: {
   return "telegram:unknown";
 }
 
-export function createTelegramBot(opts: TelegramBotOptions) {
+export async function createTelegramBot(opts: TelegramBotOptions) {
   const runtime: RuntimeEnv = opts.runtime ?? {
     log: console.log,
     error: console.error,
@@ -118,7 +126,7 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     },
   };
   const cfg = opts.config ?? loadConfig();
-  const account = resolveTelegramAccount({
+  const account = await resolveTelegramAccountAsync({
     cfg,
     accountId: opts.accountId,
   });
