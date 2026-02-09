@@ -2,7 +2,7 @@
  * Telegram Token Resolution Tests
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import { resolveTelegramToken, resolveTelegramTokenAsync } from "./token.js";
 

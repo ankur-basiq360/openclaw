@@ -1,11 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import {
-  parseSecretRef,
-  isSecretRef,
-  resolveSecret,
-  resolveSecretRefs,
-  clearSecretsCache,
-} from "./resolver.js";
+import { describe, it, expect, beforeEach } from "vitest";
+import { parseSecretRef, isSecretRef, resolveSecretRefs, clearSecretsCache } from "./resolver.js";
 
 describe("parseSecretRef", () => {
   it("parses pass reference", () => {

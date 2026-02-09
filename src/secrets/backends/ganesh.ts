@@ -705,7 +705,7 @@ export class GaneshBackend implements SecretsBackend {
     // Encrypt and save
     const json = JSON.stringify(store);
 
-    const { stdout, stderr } = await execAsync(
+    await execAsync(
       `echo '${json.replace(/'/g, "'\\''")}' | age -r "${this.publicKey}" -o "${secretsPath}"`,
     );
   }
@@ -806,7 +806,7 @@ export class GaneshBackend implements SecretsBackend {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
 
     // Find or create default group
-    let defaultGroup = manifest.groups.find((g: any) => g.id === "default");
+    let defaultGroup = manifest.groups.find((g: { id: string }) => g.id === "default");
     if (!defaultGroup) {
       defaultGroup = { id: "default", name: "Default", tier: 1, secrets: [] };
       manifest.groups.push(defaultGroup);

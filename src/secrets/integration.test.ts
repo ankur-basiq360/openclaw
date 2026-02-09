@@ -18,7 +18,7 @@ import { resolveSecret } from "./resolver.js";
 // Helpers
 // ============================================================================
 
-const isAgeAvailable = (): boolean => {
+const _isAgeAvailable = (): boolean => {
   try {
     execSync("which age", { stdio: "ignore" });
     execSync("which age-keygen", { stdio: "ignore" });
@@ -196,7 +196,7 @@ describe("Config Security Scanning", () => {
     /"(api[_-]?key|apikey|secret|token|password)":\s*"[a-zA-Z0-9_-]{32,}"/i,
   ];
 
-  const CONFIG_FILES = [
+  const _CONFIG_FILES = [
     path.join(os.homedir(), ".openclaw", "openclaw.json"),
     path.join(os.homedir(), ".openclaw", "agents", "main", "agent", "auth-profiles.json"),
   ];
@@ -298,7 +298,7 @@ describe("Config Security Scanning", () => {
 
     const store = JSON.parse(fs.readFileSync(configPath, "utf-8"));
 
-    for (const [profileId, profile] of Object.entries(store.profiles || {})) {
+    for (const [_profileId, profile] of Object.entries(store.profiles || {})) {
       const p = profile as Record<string, unknown>;
 
       if (p.type === "token") {

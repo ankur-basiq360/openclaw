@@ -144,7 +144,7 @@ function checkRefUsage(filePath: string): string[] {
         }
       }
     }
-  } catch (e) {
+  } catch {
     // Ignore JSON parse errors
   }
 

@@ -98,13 +98,10 @@ export class PassBackend implements SecretsBackend {
       const sanitizedPath = secretPath.replace(/[^a-zA-Z0-9_\-/]/g, "");
 
       // Use echo piped to pass insert -m (multiline mode, no confirmation)
-      const { stdout, stderr } = await execAsync(
-        `echo "${value.replace(/"/g, '\\"')}" | pass insert -m "${sanitizedPath}"`,
-        {
-          env,
-          timeout: 10000,
-        },
-      );
+      await execAsync(`echo "${value.replace(/"/g, '\\"')}" | pass insert -m "${sanitizedPath}"`, {
+        env,
+        timeout: 10000,
+      });
 
       return true;
     } catch (error) {
