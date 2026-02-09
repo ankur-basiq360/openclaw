@@ -5,8 +5,6 @@ import { type Message, type UserFromGetMe, ReactionTypeEmoji } from "@grammyjs/t
 import { Bot, webhookCallback } from "grammy";
 import type { OpenClawConfig, ReplyToMode } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
-import type { RuntimeEnv } from "../runtime.js";
-import type { TelegramContext } from "./bot/types.js";
 import type { TelegramContext, TelegramMessage } from "./bot/types.js";
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { resolveTextChunkLimit } from "../auto-reply/chunk.js";
@@ -41,11 +39,6 @@ import {
   resolveTelegramUpdateId,
   type TelegramUpdateKeyContext,
 } from "./bot-updates.js";
-import {
-  buildTelegramGroupPeerId,
-  resolveTelegramForumThreadId,
-  resolveTelegramStreamMode,
-} from "./bot/helpers.js";
 import {
   buildTelegramGroupPeerId,
   buildTelegramParentPeer,
