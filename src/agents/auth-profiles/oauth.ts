@@ -171,7 +171,10 @@ export async function resolveApiKeyForProfile(params: {
 
   if (cred.type === "api_key") {
     // Support secret refs: try keyRef first, fall back to key
-    const apiKey = await resolveApiKey(cred);
+    const apiKey = await resolveApiKey({
+      ...cred,
+      key: cred.key ?? cred.keyRef ?? "",
+    });
     if (!apiKey) {
       return null;
     }

@@ -221,7 +221,8 @@ export async function sendMessageTelegram(
   // Only include these if actually provided to keep API calls clean.
   const messageThreadId =
     opts.messageThreadId != null ? opts.messageThreadId : target.messageThreadId;
-  const threadIdParams = buildTelegramThreadParams(messageThreadId);
+  const threadSpec = messageThreadId != null ? { id: messageThreadId, scope: "none" as const } : null;
+  const threadIdParams = buildTelegramThreadParams(threadSpec);
   const threadParams: Record<string, unknown> = threadIdParams ? { ...threadIdParams } : {};
   const quoteText = opts.quoteText?.trim();
   if (opts.replyToMessageId != null) {
@@ -694,7 +695,8 @@ export async function sendStickerTelegram(
 
   const messageThreadId =
     opts.messageThreadId != null ? opts.messageThreadId : target.messageThreadId;
-  const threadIdParams = buildTelegramThreadParams(messageThreadId);
+  const threadSpec = messageThreadId != null ? { id: messageThreadId, scope: "none" as const } : null;
+  const threadIdParams = buildTelegramThreadParams(threadSpec);
   const threadParams: Record<string, number> = threadIdParams ? { ...threadIdParams } : {};
   if (opts.replyToMessageId != null) {
     threadParams.reply_to_message_id = Math.trunc(opts.replyToMessageId);
