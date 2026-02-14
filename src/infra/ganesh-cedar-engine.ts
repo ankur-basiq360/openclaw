@@ -213,16 +213,27 @@ export async function evaluateCommandCedar(
   // Build Cedar entities and request
   const baseCommand = extractBaseCommand(command);
   const agentId = opts?.agentId || "main";
+  const sessionKey = opts?.sessionKey || "unknown";
   const commandId = `cmd-${Date.now()}`;
+  const sessionTier = classifySessionTier(agentId, sessionKey);
+
+  // Agent parents determine role-based permissions
+  const agentParents: Array<{ type: string; id: string }> = [];
+  agentParents.push({ type: "Ganesh::Role", id: sessionTier.role });
 
   const entities = [
+    // Role entities (empty, just for grouping)
+    { uid: { type: "Ganesh::Role", id: "admin" }, attrs: {}, parents: [] },
+    { uid: { type: "Ganesh::Role", id: "worker" }, attrs: {}, parents: [] },
+    { uid: { type: "Ganesh::Role", id: "restricted" }, attrs: {}, parents: [] },
     {
       uid: { type: "Ganesh::Agent", id: agentId },
       attrs: {
-        tier: 1,
-        session: opts?.sessionKey || "unknown",
+        tier: sessionTier.tier,
+        session: sessionKey,
+        sessionType: sessionTier.type,
       },
-      parents: [],
+      parents: agentParents,
     },
     {
       uid: { type: "Ganesh::Command", id: commandId },
@@ -338,6 +349,53 @@ export async function evaluateCommandCedar(
       evaluatedAt: now,
     };
   }
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+// ============================================================================
+// Session Tier Classification
+// ============================================================================
+
+interface SessionTier {
+  tier: number; // 1=admin, 2=worker, 3=restricted
+  role: string; // Cedar role entity ID
+  type: string; // session type for logging
+}
+
+/**
+ * Classify a session into a permission tier based on agent ID and session key.
+ *
+ * Tier 1 (admin): Main session — direct chat with Ankur. Full access.
+ * Tier 2 (worker): Cron jobs and spawned sub-agents from main. Most commands allowed,
+ *                  but no service start/restart, no sensitive file access.
+ * Tier 3 (restricted): Unknown or external agents. Minimal permissions.
+ */
+function classifySessionTier(agentId: string, sessionKey: string): SessionTier {
+  // Main session: direct conversation
+  if (agentId === "main" && !sessionKey.includes("cron:") && !sessionKey.includes(":spawn:")) {
+    return { tier: 1, role: "admin", type: "main" };
+  }
+
+  // Cron jobs spawned by main agent
+  if (sessionKey.includes("cron:") || sessionKey.startsWith("agent:main:cron:")) {
+    return { tier: 2, role: "worker", type: "cron" };
+  }
+
+  // Sub-agents spawned by main
+  if (agentId === "main" && (sessionKey.includes(":spawn:") || sessionKey.includes("isolated"))) {
+    return { tier: 2, role: "worker", type: "sub-agent" };
+  }
+
+  // Known agent IDs that we trust
+  if (agentId === "main") {
+    return { tier: 2, role: "worker", type: "main-derived" };
+  }
+
+  // Everything else: restricted
+  return { tier: 3, role: "restricted", type: "unknown" };
 }
 
 // ============================================================================
