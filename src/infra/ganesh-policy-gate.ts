@@ -76,15 +76,8 @@ const AUDIT_DIR = path.join(GANESH_HOME, "audit");
 
 /** Check if the policy gate is enabled */
 export function isPolicyGateEnabled(): boolean {
-  // Env override takes precedence
-  const envVal = process.env.GANESH_POLICY_GATE?.toLowerCase();
-  if (envVal === "0" || envVal === "false" || envVal === "off") {
-    return false;
-  }
-  if (envVal === "1" || envVal === "true" || envVal === "on") {
-    return true;
-  }
-  // Default: enabled if policy config exists
+  // SECURITY: No env var override — policy gate can only be controlled via config file.
+  // This prevents the agent from disabling its own guardrails at runtime.
   return fs.existsSync(POLICY_PATH);
 }
 
