@@ -445,6 +445,138 @@ async function pollTelegramApproval(
 // Ganesh Backend
 // ============================================================================
 
+// ============================================================================
+// Credential Broker (inline, lightweight)
+// ============================================================================
+
+interface BrokerToken {
+  token: string;
+  secretPath: string;
+  issuedAt: number;
+  expiresAt: number;
+  resolveCount: number;
+  maxResolves: number;
+  issuedBy: string;
+}
+
+class InlineBroker {
+  private tokens: Map<string, BrokerToken> = new Map();
+  private stats = { issued: 0, resolved: 0, expired: 0, revoked: 0 };
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+
+  start(): void {
+    if (this.cleanupTimer) {
+      return;
+    }
+    this.cleanupTimer = setInterval(() => this.cleanup(), 30_000);
+    if (this.cleanupTimer.unref) {
+      this.cleanupTimer.unref();
+    }
+  }
+
+  stop(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+    this.tokens.clear();
+  }
+
+  issue(
+    secretPath: string,
+    opts: { ttl?: number; maxResolves?: number; issuedBy?: string } = {},
+  ): string {
+    const { randomUUID } = require("node:crypto");
+    const token = randomUUID();
+    const now = Date.now();
+    this.tokens.set(token, {
+      token,
+      secretPath,
+      issuedAt: now,
+      expiresAt: now + (opts.ttl ?? 300) * 1000,
+      resolveCount: 0,
+      maxResolves: opts.maxResolves ?? 100,
+      issuedBy: opts.issuedBy ?? "ganesh-backend",
+    });
+    this.stats.issued++;
+    this.auditLog("broker_issue", { secretPath, ttl: opts.ttl ?? 300, issuedBy: opts.issuedBy });
+    return token;
+  }
+
+  validate(token: string): { valid: boolean; secretPath?: string; error?: string } {
+    const record = this.tokens.get(token);
+    if (!record) {
+      return { valid: false, error: "token_not_found" };
+    }
+    if (Date.now() > record.expiresAt) {
+      this.tokens.delete(token);
+      this.stats.expired++;
+      this.auditLog("broker_expired", { secretPath: record.secretPath });
+      return { valid: false, error: "token_expired" };
+    }
+    if (record.resolveCount >= record.maxResolves) {
+      this.tokens.delete(token);
+      this.auditLog("broker_exhausted", {
+        secretPath: record.secretPath,
+        resolves: record.resolveCount,
+      });
+      return { valid: false, error: "max_resolves_exceeded" };
+    }
+    record.resolveCount++;
+    this.stats.resolved++;
+    this.auditLog("broker_resolve", {
+      secretPath: record.secretPath,
+      resolveCount: record.resolveCount,
+    });
+    return { valid: true, secretPath: record.secretPath };
+  }
+
+  revoke(token: string): boolean {
+    const record = this.tokens.get(token);
+    if (!record) {
+      return false;
+    }
+    this.tokens.delete(token);
+    this.stats.revoked++;
+    this.auditLog("broker_revoke", { secretPath: record.secretPath });
+    return true;
+  }
+
+  getStats() {
+    return { ...this.stats, active: this.tokens.size };
+  }
+
+  private cleanup(): void {
+    const now = Date.now();
+    const expired: string[] = [];
+    this.tokens.forEach((record, token) => {
+      if (now >= record.expiresAt) {
+        expired.push(token);
+      }
+    });
+    for (const token of expired) {
+      this.tokens.delete(token);
+      this.stats.expired++;
+    }
+  }
+
+  private auditLog(event: string, details: Record<string, unknown>): void {
+    try {
+      const auditDir = path.join(os.homedir(), ".ganesh", "audit");
+      const date = new Date().toISOString().slice(0, 10);
+      const logFile = path.join(auditDir, `broker-${date}.jsonl`);
+      const entry = { timestamp: new Date().toISOString(), event, ...details };
+      fs.appendFileSync(logFile, JSON.stringify(entry) + "\n", { mode: 0o600 });
+    } catch {
+      // Best effort
+    }
+  }
+}
+
+// ============================================================================
+// Ganesh Backend
+// ============================================================================
+
 export class GaneshBackend implements SecretsBackend {
   readonly name = "ganesh" as const;
 
@@ -455,10 +587,16 @@ export class GaneshBackend implements SecretsBackend {
   private publicKey: string | null = null;
   private secretsCache: Map<string, string> = new Map();
   private manifest: VaultManifest | null = null;
+  private broker: InlineBroker;
+
+  // Track active broker tokens per secret path for lifecycle management
+  private activeTokens: Map<string, string> = new Map(); // secretPath -> token
 
   constructor(config: GaneshBackendConfig = {}) {
     this.config = config;
     this.vaultPath = (config.vaultPath || "~/.ganesh/vault").replace("~", os.homedir());
+    this.broker = new InlineBroker();
+    this.broker.start();
   }
 
   /**
@@ -648,6 +786,12 @@ export class GaneshBackend implements SecretsBackend {
     this.publicKey = null;
     this.secretsCache.clear();
     this.manifest = null;
+    // Revoke all active tokens and stop broker
+    this.activeTokens.forEach((token) => {
+      this.broker.revoke(token);
+    });
+    this.activeTokens.clear();
+    this.broker.stop();
   }
 
   private async loadSecrets(): Promise<void> {
@@ -726,14 +870,42 @@ export class GaneshBackend implements SecretsBackend {
     // Check tier
     const tier = this.getSecretTier(normalizedPath);
 
-    // Tier 1 & 2: direct access from cache
-    if (tier < 3) {
-      const value = this.secretsCache.get(normalizedPath);
-      return value ?? null;
+    // Tier 3: requires MFA approval (broker can't shortcut this)
+    if (tier >= 3) {
+      return this.resolveTier3(normalizedPath);
     }
 
-    // Tier 3: requires MFA approval
-    return this.resolveTier3(normalizedPath);
+    // Tier 1 & 2: Brokered access
+    // Check if we have an active token for this path
+    const existingToken = this.activeTokens.get(normalizedPath);
+    if (existingToken) {
+      const validation = this.broker.validate(existingToken);
+      if (validation.valid) {
+        // Token still good — return the cached secret
+        const value = this.secretsCache.get(normalizedPath);
+        return value ?? null;
+      }
+      // Token expired/exhausted — clean up and issue new one
+      this.activeTokens.delete(normalizedPath);
+    }
+
+    // Issue a new broker token (5 min TTL, max 100 resolves)
+    const token = this.broker.issue(normalizedPath, {
+      ttl: 300,
+      maxResolves: 100,
+      issuedBy: "openclaw-secrets-resolver",
+    });
+    this.activeTokens.set(normalizedPath, token);
+
+    // Validate the freshly-issued token (counts as first resolve)
+    const validation = this.broker.validate(token);
+    if (!validation.valid) {
+      console.error(`[secrets:ganesh] Broker validation failed immediately: ${validation.error}`);
+      return null;
+    }
+
+    const value = this.secretsCache.get(normalizedPath);
+    return value ?? null;
   }
 
   /**
@@ -819,6 +991,19 @@ export class GaneshBackend implements SecretsBackend {
 
     manifest.lastModified = new Date().toISOString();
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), { mode: 0o600 });
+  }
+
+  /**
+   * Get broker statistics for monitoring
+   */
+  getBrokerStats(): {
+    issued: number;
+    resolved: number;
+    expired: number;
+    revoked: number;
+    active: number;
+  } {
+    return this.broker.getStats();
   }
 
   async list(prefix?: string): Promise<string[]> {
