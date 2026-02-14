@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pkill:*)",
+      "Bash(kill:*)",
+      "Bash(pnpm openclaw gateway stop:*)",
+      "Bash(pnpm openclaw gateway start:*)",
+      "Bash(pnpm openclaw gateway status:*)",
+      "Bash(/opt/openclaw-dev/openclaw/extensions/device-pair/.disabled << 'EOF'\nTemporarily disabled due to bundler issues\nEOF)",
+      "Bash(/opt/openclaw-dev/openclaw/extensions/memory-core/.disabled << 'EOF'\nTemporarily disabled due to bundler issues\nEOF)",
+      "Read(//etc/systemd/system/**)",
+      "Bash(chmod:*)"
+    ]
+  }
+}

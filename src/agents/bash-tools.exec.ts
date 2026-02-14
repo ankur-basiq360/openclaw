@@ -19,6 +19,7 @@ import {
   resolveExecApprovals,
   resolveExecApprovalsFromFile,
 } from "../infra/exec-approvals.js";
+import { evaluateCommand, isPolicyGateEnabled } from "../infra/ganesh-policy-gate.js";
 import { requestHeartbeatNow } from "../infra/heartbeat-wake.js";
 import { buildNodeShellCommand } from "../infra/node-shell.js";
 import {
@@ -848,6 +849,37 @@ export function createExecTool(
       if (!params.command) {
         throw new Error("Provide a command to start.");
       }
+
+      // ── Ganesh Policy Gate ──────────────────────────────────────────
+      // Evaluate command against ganesh security policy before execution.
+      // Fail-open: errors in policy evaluation never block execution.
+      if (isPolicyGateEnabled()) {
+        try {
+          const policyResult = evaluateCommand(params.command, {
+            agentId,
+            sessionKey: defaults?.sessionKey,
+            host: defaults?.host,
+            cwd: params.workdir?.trim() || defaults?.cwd || process.cwd(),
+          });
+
+          if (policyResult.decision === "deny") {
+            throw new Error(
+              `Command denied by Ganesh security policy: ${policyResult.reason}` +
+                (policyResult.matchedRule ? ` (rule: ${policyResult.matchedRule})` : ""),
+            );
+          }
+          // "ask" decisions are deferred to OpenClaw's existing approval system
+          // (the exec-approvals flow handles user confirmation)
+        } catch (err) {
+          // Re-throw policy denials
+          if (err instanceof Error && err.message.startsWith("Command denied by Ganesh")) {
+            throw err;
+          }
+          // Fail-open: log warning but don't block
+          logWarn(`ganesh-policy-gate: evaluation error, failing open: ${err}`);
+        }
+      }
+      // ── End Policy Gate ─────────────────────────────────────────────
 
       const maxOutput = DEFAULT_MAX_OUTPUT;
       const pendingMaxOutput = DEFAULT_PENDING_MAX_OUTPUT;
