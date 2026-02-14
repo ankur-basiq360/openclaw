@@ -15,6 +15,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { logInfo, logWarn } from "../logger.js";
+import { isCedarAvailable, evaluateCommandCedar } from "./ganesh-cedar-engine.js";
 
 // ============================================================================
 // Types
@@ -185,7 +186,7 @@ function evaluateCondition(condition: PolicyCondition, details: Record<string, u
  * @param opts - Optional context (agentId, sessionKey, host, cwd)
  * @returns PolicyGateResult with decision and reason
  */
-export function evaluateCommand(
+export async function evaluateCommand(
   command: string,
   opts?: {
     agentId?: string;
@@ -193,8 +194,18 @@ export function evaluateCommand(
     host?: string;
     cwd?: string;
   },
-): PolicyGateResult {
+): Promise<PolicyGateResult> {
   const now = new Date().toISOString();
+
+  // Cedar engine takes priority when available
+  if (isCedarAvailable()) {
+    try {
+      return await evaluateCommandCedar(command, opts);
+    } catch (err) {
+      logWarn(`ganesh-policy-gate: Cedar evaluation failed, falling back to JSON: ${err}`);
+      // Fall through to JSON engine
+    }
+  }
 
   // If policy gate is disabled, always allow
   if (!isPolicyGateEnabled()) {

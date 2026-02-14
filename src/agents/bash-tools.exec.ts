@@ -855,7 +855,7 @@ export function createExecTool(
       // Fail-open: errors in policy evaluation never block execution.
       if (isPolicyGateEnabled()) {
         try {
-          const policyResult = evaluateCommand(params.command, {
+          const policyResult = await evaluateCommand(params.command, {
             agentId,
             sessionKey: defaults?.sessionKey,
             host: defaults?.host,
