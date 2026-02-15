@@ -61,8 +61,7 @@ interface CedarWasm {
   getCedarVersion: () => string;
 }
 
-// Cedar WASM types (minimal — the actual types come from the package)
-// We use `any` for the WASM module interface to avoid coupling to internal types.
+// Cedar WASM types (minimal — matches the subset of the WASM API we use).
 
 interface AuditEntry {
   timestamp: string;
@@ -78,8 +77,8 @@ interface AuditEntry {
   host?: string;
 }
 
-// IDs of policies that map to "ask" instead of hard deny
-const ASK_POLICY_IDS = new Set(["ask-systemctl", "ask-reboot-shutdown"]);
+// Policies with "ask-" prefix map to "ask" decision instead of hard deny.
+// This is detected dynamically from the policy ID naming convention.
 
 // ============================================================================
 // Cedar Module Loading
@@ -128,7 +127,8 @@ function reloadFilesIfNeeded(): { policies: Record<string, string> | null; schem
     if (fs.existsSync(POLICIES_D_DIR)) {
       policiesDMtime = fs.statSync(POLICIES_D_DIR).mtimeMs;
     }
-    const combinedMtime = pStat.mtimeMs + policiesDMtime;
+    // Use string concat of mtimes to avoid numeric collision
+    const combinedMtime = pStat.mtimeMs * 1000 + policiesDMtime;
 
     if (combinedMtime !== policiesMtime) {
       // Load main policy file
@@ -319,7 +319,7 @@ export async function evaluateCommandCedar(
       matchedRule = reasons[0];
     } else {
       // Cedar denied — check if the forbid policy is an "ask" policy
-      const isAskPolicy = reasons.some((r) => ASK_POLICY_IDS.has(r));
+      const isAskPolicy = reasons.some((r) => r.startsWith("ask-"));
       decision = isAskPolicy ? "ask" : "deny";
       matchedRule = reasons[0];
     }
@@ -478,6 +478,7 @@ function writeAudit(entry: AuditEntry): void {
 // Validation helpers (for CLI/testing)
 // ============================================================================
 
+// TODO: wire into `ganesh cedar validate` CLI command
 export async function validatePolicies(): Promise<{ valid: boolean; errors: string[] }> {
   const cedar = await loadCedarModule();
   if (!cedar) {

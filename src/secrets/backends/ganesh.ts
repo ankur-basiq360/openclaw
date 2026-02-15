@@ -13,11 +13,13 @@
  */
 
 import { exec } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { GaneshBackendConfig, SecretsBackend } from "../types.js";
+import { logInfo, logWarn } from "../../logger.js";
 
 const execAsync = promisify(exec);
 
@@ -65,7 +67,6 @@ interface TelegramMfaConfig {
 // ============================================================================
 
 function generateTotp(secret: string, time?: number): string {
-  const crypto = require("node:crypto");
   const counter = Math.floor((time ?? Date.now()) / 1000 / 30);
   const buffer = Buffer.alloc(8);
   buffer.writeBigInt64BE(BigInt(counter));
@@ -486,8 +487,7 @@ class InlineBroker {
     secretPath: string,
     opts: { ttl?: number; maxResolves?: number; issuedBy?: string } = {},
   ): string {
-    const { randomUUID } = require("node:crypto");
-    const token = randomUUID();
+    const token = crypto.randomUUID();
     const now = Date.now();
     this.tokens.set(token, {
       token,
@@ -756,9 +756,17 @@ export class GaneshBackend implements SecretsBackend {
       const identityPath = path.join(this.vaultPath, "identity.key");
       this.secretKey = fs.readFileSync(identityPath, "utf-8").trim();
 
-      // Derive public key
-      const { stdout } = await execAsync(`echo "${this.secretKey}" | age-keygen -y`);
-      this.publicKey = stdout.trim();
+      // Derive public key (via temp file to avoid shell injection)
+      const tempKeyForPub = path.join(os.tmpdir(), `ganesh-pub-${Date.now()}.key`);
+      fs.writeFileSync(tempKeyForPub, this.secretKey, { mode: 0o600 });
+      try {
+        const { stdout } = await execAsync(`age-keygen -y "${tempKeyForPub}"`);
+        this.publicKey = stdout.trim();
+      } finally {
+        try {
+          fs.unlinkSync(tempKeyForPub);
+        } catch {}
+      }
 
       // Load manifest for tier information
       const manifestPath = path.join(this.vaultPath, "manifest.json");
@@ -772,7 +780,7 @@ export class GaneshBackend implements SecretsBackend {
       this.unlocked = true;
       return true;
     } catch (error) {
-      console.error("[secrets:ganesh] Failed to unlock vault:", error);
+      logWarn("[secrets:ganesh] Failed to unlock vault:", error);
       return false;
     }
   }
@@ -846,12 +854,17 @@ export class GaneshBackend implements SecretsBackend {
       };
     }
 
-    // Encrypt and save
-    const json = JSON.stringify(store);
-
-    await execAsync(
-      `echo '${json.replace(/'/g, "'\\''")}' | age -r "${this.publicKey}" -o "${secretsPath}"`,
-    );
+    // Encrypt and save (via temp file to avoid shell injection)
+    const jsonStr = JSON.stringify(store);
+    const tempPlain = path.join(os.tmpdir(), `ganesh-save-${Date.now()}.json`);
+    fs.writeFileSync(tempPlain, jsonStr, { mode: 0o600 });
+    try {
+      await execAsync(`age -r "${this.publicKey}" -o "${secretsPath}" "${tempPlain}"`);
+    } finally {
+      try {
+        fs.unlinkSync(tempPlain);
+      } catch {}
+    }
   }
 
   async resolve(secretPath: string, _field?: string): Promise<string | null> {
@@ -859,13 +872,14 @@ export class GaneshBackend implements SecretsBackend {
     if (!this.unlocked) {
       const ok = await this.unlock();
       if (!ok) {
-        console.error("[secrets:ganesh] Vault is locked and could not auto-unlock");
+        logWarn("[secrets:ganesh] Vault is locked and could not auto-unlock");
         return null;
       }
     }
 
     // Normalize path (support both / and - separators)
-    const normalizedPath = secretPath.replace(/\//g, "/");
+    // Normalize separators (support both - and / as path separators)
+    const normalizedPath = secretPath.replace(/-/g, "/");
 
     // Check tier
     const tier = this.getSecretTier(normalizedPath);
@@ -900,7 +914,7 @@ export class GaneshBackend implements SecretsBackend {
     // Validate the freshly-issued token (counts as first resolve)
     const validation = this.broker.validate(token);
     if (!validation.valid) {
-      console.error(`[secrets:ganesh] Broker validation failed immediately: ${validation.error}`);
+      logWarn(`[secrets:ganesh] Broker validation failed immediately: ${validation.error}`);
       return null;
     }
 
@@ -915,19 +929,19 @@ export class GaneshBackend implements SecretsBackend {
     const mfaConfig = await this.getMfaConfig();
 
     if (!mfaConfig) {
-      console.error("[secrets:ganesh] Tier 3 secret requested but MFA not configured");
+      logWarn("[secrets:ganesh] Tier 3 secret requested but MFA not configured");
       return null;
     }
 
     const groupName = this.getSecretGroup(secretPath);
 
-    console.log(`[secrets:ganesh] Requesting Tier 3 MFA approval for: ${secretPath}`);
+    logInfo(`[secrets:ganesh] Requesting Tier 3 MFA approval for: ${secretPath}`);
 
     // Send approval request
     const sendResult = await sendTelegramApprovalRequest(mfaConfig, secretPath, groupName);
 
     if (!sendResult.ok || !sendResult.messageId || !sendResult.requestId) {
-      console.error(`[secrets:ganesh] Failed to send MFA request: ${sendResult.error}`);
+      logWarn(`[secrets:ganesh] Failed to send MFA request: ${sendResult.error}`);
       return null;
     }
 
@@ -940,11 +954,11 @@ export class GaneshBackend implements SecretsBackend {
     );
 
     if (!approval.approved) {
-      console.error(`[secrets:ganesh] MFA denied: ${approval.error}`);
+      logWarn(`[secrets:ganesh] MFA denied: ${approval.error}`);
       return null;
     }
 
-    console.log(`[secrets:ganesh] Tier 3 access approved for: ${secretPath}`);
+    logInfo(`[secrets:ganesh] Tier 3 access approved for: ${secretPath}`);
 
     // Return the secret (never cached for Tier 3)
     return this.secretsCache.get(secretPath) ?? null;
@@ -968,7 +982,7 @@ export class GaneshBackend implements SecretsBackend {
 
       return true;
     } catch (error) {
-      console.error("[secrets:ganesh] Failed to store secret:", error);
+      logWarn("[secrets:ganesh] Failed to store secret:", error);
       return false;
     }
   }
