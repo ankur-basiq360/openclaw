@@ -94,6 +94,7 @@ async function loadCedarModule(): Promise<CedarWasm | null> {
 
   try {
     // Dynamic import of the ESM cedar-wasm/nodejs
+    // @ts-expect-error - cedar-wasm installed separately, not in workspace lockfile
     const mod = await import("@cedar-policy/cedar-wasm/nodejs");
     cedarModule = mod.default || mod;
     logInfo(`ganesh-cedar: loaded Cedar ${cedarModule!.getCedarVersion()}`);

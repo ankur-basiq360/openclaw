@@ -64,14 +64,16 @@ export function buildGatewayCronService(params: {
         cfg: runtimeConfig,
         agentId,
       });
-      enqueueSystemEvent(text, { sessionKey });
+      enqueueSystemEvent(text, { sessionKey, contextKey: opts?.contextKey });
     },
     requestHeartbeatNow,
     runHeartbeatOnce: async (opts) => {
       const runtimeConfig = loadConfig();
+      const agentId = opts?.agentId ? resolveCronAgent(opts.agentId).agentId : undefined;
       return await runHeartbeatOnce({
         cfg: runtimeConfig,
         reason: opts?.reason,
+        agentId,
         deps: { ...params.deps, runtime: defaultRuntime },
       });
     },

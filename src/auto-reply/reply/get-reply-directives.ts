@@ -14,7 +14,7 @@ import { resolveBlockStreamingChunking } from "./block-streaming.js";
 import { buildCommandContext } from "./commands.js";
 import { type InlineDirectives, parseInlineDirectives } from "./directive-handling.js";
 import { applyInlineDirectiveOverrides } from "./get-reply-directives-apply.js";
-import { clearInlineDirectives } from "./get-reply-directives-utils.js";
+import { clearExecInlineDirectives, clearInlineDirectives } from "./get-reply-directives-utils.js";
 import { defaultGroupActivation, resolveGroupRequireMention } from "./groups.js";
 import { CURRENT_MESSAGE_MARKER, stripMentions, stripStructuralPrefixes } from "./mentions.js";
 import { createModelSelectionState, resolveContextTokens } from "./model-selection.js";
@@ -106,6 +106,7 @@ export async function resolveReplyDirectives(params: {
   aliasIndex: ModelAliasIndex;
   provider: string;
   model: string;
+  hasResolvedHeartbeatModelOverride: boolean;
   typing: TypingController;
   opts?: GetReplyOptions;
   skillFilter?: string[];
@@ -131,6 +132,7 @@ export async function resolveReplyDirectives(params: {
     defaultModel,
     provider: initialProvider,
     model: initialModel,
+    hasResolvedHeartbeatModelOverride,
     typing,
     opts,
     skillFilter,
@@ -213,23 +215,7 @@ export async function resolveReplyDirectives(params: {
   }
   if (isGroup && ctx.WasMentioned !== true && parsedDirectives.hasExecDirective) {
     if (parsedDirectives.execSecurity !== "deny") {
-      parsedDirectives = {
-        ...parsedDirectives,
-        hasExecDirective: false,
-        execHost: undefined,
-        execSecurity: undefined,
-        execAsk: undefined,
-        execNode: undefined,
-        rawExecHost: undefined,
-        rawExecSecurity: undefined,
-        rawExecAsk: undefined,
-        rawExecNode: undefined,
-        hasExecOptions: false,
-        invalidExecHost: false,
-        invalidExecSecurity: false,
-        invalidExecAsk: false,
-        invalidExecNode: false,
-      };
+      parsedDirectives = clearExecInlineDirectives(parsedDirectives);
     }
   }
   const hasInlineDirective =
@@ -391,6 +377,7 @@ export async function resolveReplyDirectives(params: {
     provider,
     model,
     hasModelDirective: directives.hasModelDirective,
+    hasResolvedHeartbeatModelOverride,
   });
   provider = modelState.provider;
   model = modelState.model;

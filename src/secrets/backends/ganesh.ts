@@ -780,7 +780,7 @@ export class GaneshBackend implements SecretsBackend {
       this.unlocked = true;
       return true;
     } catch (error) {
-      logWarn("[secrets:ganesh] Failed to unlock vault:", error);
+      logWarn(`[secrets:ganesh] Failed to unlock vault: ${error}`);
       return false;
     }
   }
@@ -982,7 +982,7 @@ export class GaneshBackend implements SecretsBackend {
 
       return true;
     } catch (error) {
-      logWarn("[secrets:ganesh] Failed to store secret:", error);
+      logWarn(`[secrets:ganesh] Failed to store secret: ${error}`);
       return false;
     }
   }
