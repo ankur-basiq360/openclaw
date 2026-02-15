@@ -25,6 +25,7 @@ const GANESH_HOME = path.join(os.homedir(), ".ganesh");
 const CEDAR_DIR = path.join(GANESH_HOME, "config", "cedar");
 const SCHEMA_PATH = path.join(CEDAR_DIR, "schema.cedarschema");
 const POLICIES_PATH = path.join(CEDAR_DIR, "policies.cedar");
+const POLICIES_D_DIR = path.join(CEDAR_DIR, "policies.d");
 const AUDIT_DIR = path.join(GANESH_HOME, "audit");
 
 // Cedar WASM module (lazy loaded)
@@ -122,12 +123,34 @@ function reloadFilesIfNeeded(): { policies: Record<string, string> | null; schem
     }
 
     const pStat = fs.statSync(POLICIES_PATH);
-    if (pStat.mtimeMs !== policiesMtime) {
-      const raw = fs.readFileSync(POLICIES_PATH, "utf-8");
+    // Also check policies.d/ directory mtime
+    let policiesDMtime = 0;
+    if (fs.existsSync(POLICIES_D_DIR)) {
+      policiesDMtime = fs.statSync(POLICIES_D_DIR).mtimeMs;
+    }
+    const combinedMtime = pStat.mtimeMs + policiesDMtime;
+
+    if (combinedMtime !== policiesMtime) {
+      // Load main policy file
+      let raw = fs.readFileSync(POLICIES_PATH, "utf-8");
+
+      // Load additional policies from policies.d/
+      if (fs.existsSync(POLICIES_D_DIR)) {
+        const extraFiles = fs
+          .readdirSync(POLICIES_D_DIR)
+          .filter((f) => f.endsWith(".cedar"))
+          .toSorted();
+        for (const file of extraFiles) {
+          const extraPath = path.join(POLICIES_D_DIR, file);
+          raw += "\n\n// ── from policies.d/" + file + " ──\n";
+          raw += fs.readFileSync(extraPath, "utf-8");
+        }
+      }
+
       cachedPoliciesRaw = raw;
       // Parse into named policies using @id annotations
       cachedPolicies = parsePoliciesIntoMap(raw);
-      policiesMtime = pStat.mtimeMs;
+      policiesMtime = combinedMtime;
       logInfo(`ganesh-cedar: policies reloaded (${Object.keys(cachedPolicies).length} rules)`);
     }
 
