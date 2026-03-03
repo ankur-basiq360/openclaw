@@ -96,12 +96,12 @@ async function loadCedarModule(): Promise<CedarWasm | null> {
     // Dynamic import of the ESM cedar-wasm/nodejs
     // cedar-wasm uses __dirname internally to locate the .wasm file.
     // In a bundled ESM context, __dirname is undefined, so we must
-    // set it to the cedar-wasm nodejs package directory.
-    const { createRequire } = await import("node:module");
-    const { join } = await import("node:path");
-    const require = createRequire(import.meta.url);
-    const cedarPkgJson = require.resolve("@cedar-policy/cedar-wasm/package.json");
-    const cedarPkgPath = join(cedarPkgJson, "..", "nodejs");
+    // set it to the cedar-wasm nodejs directory where the .wasm lives.
+    const { dirname, join } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    // import.meta.resolve bypasses package.json exports restrictions
+    const cedarEntryUrl = import.meta.resolve("@cedar-policy/cedar-wasm");
+    const cedarPkgPath = join(dirname(fileURLToPath(cedarEntryUrl)), "nodejs");
     const savedDirname = (globalThis as Record<string, unknown>).__dirname;
     (globalThis as Record<string, unknown>).__dirname = cedarPkgPath;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
