@@ -94,6 +94,13 @@ async function loadCedarModule(): Promise<CedarWasm | null> {
 
   try {
     // Dynamic import of the ESM cedar-wasm/nodejs
+    // cedar-wasm uses __dirname internally to locate the .wasm file;
+    // ensure it's defined in ESM context via import.meta.url
+    const { fileURLToPath } = await import("node:url");
+    const { dirname } = await import("node:path");
+    if (typeof globalThis.__dirname === "undefined") {
+      (globalThis as Record<string, unknown>).__dirname = dirname(fileURLToPath(import.meta.url));
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mod: any = await import("@cedar-policy/cedar-wasm/nodejs");
     cedarModule = mod.default || mod;
