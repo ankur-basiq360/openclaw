@@ -94,15 +94,27 @@ async function loadCedarModule(): Promise<CedarWasm | null> {
 
   try {
     // Dynamic import of the ESM cedar-wasm/nodejs
-    // cedar-wasm uses __dirname internally to locate the .wasm file;
-    // ensure it's defined in ESM context via import.meta.url
-    const { fileURLToPath } = await import("node:url");
+    // cedar-wasm uses __dirname internally to locate the .wasm file.
+    // In a bundled ESM context, __dirname is undefined, so we must
+    // set it to the cedar-wasm package directory (not our dist dir).
+    const { createRequire } = await import("node:module");
     const { dirname } = await import("node:path");
-    if (typeof globalThis.__dirname === "undefined") {
-      (globalThis as Record<string, unknown>).__dirname = dirname(fileURLToPath(import.meta.url));
-    }
+    const require = createRequire(import.meta.url);
+    const cedarPkgPath = require.resolve("@cedar-policy/cedar-wasm/nodejs/cedar_wasm.js");
+    const savedDirname = (globalThis as Record<string, unknown>).__dirname;
+    (globalThis as Record<string, unknown>).__dirname = dirname(cedarPkgPath);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mod: any = await import("@cedar-policy/cedar-wasm/nodejs");
+    let mod: any;
+    try {
+      mod = await import("@cedar-policy/cedar-wasm/nodejs");
+    } finally {
+      // Restore original __dirname to avoid polluting other modules
+      if (savedDirname === undefined) {
+        delete (globalThis as Record<string, unknown>).__dirname;
+      } else {
+        (globalThis as Record<string, unknown>).__dirname = savedDirname;
+      }
+    }
     cedarModule = mod.default || mod;
     logInfo(`ganesh-cedar: loaded Cedar ${cedarModule!.getCedarVersion()}`);
     return cedarModule;
