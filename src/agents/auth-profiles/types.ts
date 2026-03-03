@@ -1,17 +1,12 @@
 import type { OAuthCredentials } from "@mariozechner/pi-ai";
 import type { OpenClawConfig } from "../../config/config.js";
+import type { SecretRef } from "../../config/types.secrets.js";
 
 export type ApiKeyCredential = {
   type: "api_key";
   provider: string;
-  /** API key value. Can be omitted if keyRef is provided. */
   key?: string;
-  /**
-   * Secret reference for the API key (e.g., "pass:openclaw/anthropic-key").
-   * When set, the key is resolved at runtime from the configured secrets backend.
-   * Takes precedence over `key` if both are present.
-   */
-  keyRef?: string;
+  keyRef?: SecretRef;
   email?: string;
   /** Optional provider-specific metadata (e.g., account IDs, gateway IDs). */
   metadata?: Record<string, string>;
@@ -24,14 +19,8 @@ export type TokenCredential = {
    */
   type: "token";
   provider: string;
-  /** Token value. Required unless tokenRef is provided. */
   token: string;
-  /**
-   * Secret reference for the token (e.g., "pass:openclaw/token").
-   * When set, the token is resolved at runtime from the configured secrets backend.
-   * Takes precedence over `token` if both are present.
-   */
-  tokenRef?: string;
+  tokenRef?: SecretRef;
   /** Optional expiry timestamp (ms since epoch). */
   expires?: number;
   email?: string;
@@ -48,11 +37,13 @@ export type AuthProfileCredential = ApiKeyCredential | TokenCredential | OAuthCr
 
 export type AuthProfileFailureReason =
   | "auth"
+  | "auth_permanent"
   | "format"
   | "rate_limit"
   | "billing"
   | "timeout"
   | "model_not_found"
+  | "session_expired"
   | "unknown";
 
 /** Per-profile usage statistics for round-robin and cooldown tracking */

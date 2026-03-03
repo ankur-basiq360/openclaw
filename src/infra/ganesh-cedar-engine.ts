@@ -14,8 +14,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { PolicyGateDecision, PolicyGateResult } from "./ganesh-policy-gate.js";
 import { logInfo, logWarn } from "../logger.js";
+import type { PolicyGateDecision, PolicyGateResult } from "./ganesh-policy-gate.js";
 
 // ============================================================================
 // Configuration
@@ -94,8 +94,8 @@ async function loadCedarModule(): Promise<CedarWasm | null> {
 
   try {
     // Dynamic import of the ESM cedar-wasm/nodejs
-    // @ts-expect-error - cedar-wasm installed separately, not in workspace lockfile
-    const mod = await import("@cedar-policy/cedar-wasm/nodejs");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mod: any = await import("@cedar-policy/cedar-wasm/nodejs");
     cedarModule = mod.default || mod;
     logInfo(`ganesh-cedar: loaded Cedar ${cedarModule!.getCedarVersion()}`);
     return cedarModule;
@@ -164,7 +164,7 @@ function reloadFilesIfNeeded(): { policies: Record<string, string> | null; schem
       }
     }
   } catch (err) {
-    logWarn(`ganesh-cedar: file reload error: ${err}`);
+    logWarn(`ganesh-cedar: file reload error: ${String(err)}`);
   }
 
   return { policies: cachedPolicies, schema: cachedSchema };
@@ -229,7 +229,7 @@ export async function evaluateCommandCedar(
   }
 
   // Load policies
-  const { policies, schema } = reloadFilesIfNeeded();
+  const { policies, schema: _schema } = reloadFilesIfNeeded();
   if (!policies) {
     return { decision: "allow", reason: "No Cedar policies found", evaluatedAt: now };
   }
@@ -356,13 +356,13 @@ export async function evaluateCommandCedar(
     };
   } catch (err) {
     // Fail-open
-    logWarn(`ganesh-cedar: evaluation error: ${err}`);
+    logWarn(`ganesh-cedar: evaluation error: ${String(err)}`);
     writeAudit({
       timestamp: now,
       event: "cedar_policy_check",
       command,
       decision: "allow",
-      reason: `Fail-open: Cedar evaluation error: ${err}`,
+      reason: `Fail-open: Cedar evaluation error: ${String(err)}`,
       agentId: opts?.agentId,
       sessionKey: opts?.sessionKey,
       host: opts?.host,
@@ -471,7 +471,7 @@ function writeAudit(entry: AuditEntry): void {
     const auditFile = path.join(AUDIT_DIR, `cedar-${date}.jsonl`);
     fs.appendFileSync(auditFile, JSON.stringify(entry) + "\n", { mode: 0o600 });
   } catch (err) {
-    logWarn(`ganesh-cedar: audit write failed: ${err}`);
+    logWarn(`ganesh-cedar: audit write failed: ${String(err)}`);
   }
 }
 
@@ -486,7 +486,7 @@ export async function validatePolicies(): Promise<{ valid: boolean; errors: stri
     return { valid: false, errors: ["Cedar WASM not available"] };
   }
 
-  const { policies, schema } = reloadFilesIfNeeded();
+  const { policies, schema: _schema } = reloadFilesIfNeeded();
   if (!policies) {
     return { valid: false, errors: ["No policies file found"] };
   }
@@ -494,7 +494,7 @@ export async function validatePolicies(): Promise<{ valid: boolean; errors: stri
   try {
     const result = cedar.checkParsePolicySet(
       { staticPolicies: cachedPoliciesRaw || (policies as unknown as string) },
-      schema || undefined,
+      _schema || undefined,
     );
     return { valid: result.success, errors: result.errors || [] };
   } catch (err) {

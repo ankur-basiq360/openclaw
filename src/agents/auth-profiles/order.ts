@@ -58,10 +58,10 @@ export function resolveAuthProfileOrder(params: {
       }
     }
     if (cred.type === "api_key") {
-      return Boolean(cred.key?.trim() || cred.keyRef?.trim());
+      return Boolean(cred.key?.trim() || cred.keyRef);
     }
     if (cred.type === "token") {
-      if (!cred.token?.trim() && !cred.tokenRef?.trim()) {
+      if (!cred.token?.trim() && !cred.tokenRef) {
         return false;
       }
       if (
@@ -102,13 +102,9 @@ export function resolveAuthProfileOrder(params: {
     const inCooldown: Array<{ profileId: string; cooldownUntil: number }> = [];
 
     for (const profileId of deduped) {
-      const cooldownUntil = resolveProfileUnusableUntil(store.usageStats?.[profileId] ?? {}) ?? 0;
-      if (
-        typeof cooldownUntil === "number" &&
-        Number.isFinite(cooldownUntil) &&
-        cooldownUntil > 0 &&
-        now < cooldownUntil
-      ) {
+      if (isProfileInCooldown(store, profileId)) {
+        const cooldownUntil =
+          resolveProfileUnusableUntil(store.usageStats?.[profileId] ?? {}) ?? now;
         inCooldown.push({ profileId, cooldownUntil });
       } else {
         available.push(profileId);
