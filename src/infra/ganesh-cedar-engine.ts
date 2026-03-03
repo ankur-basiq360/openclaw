@@ -100,8 +100,9 @@ async function loadCedarModule(): Promise<CedarWasm | null> {
     const { dirname, join } = await import("node:path");
     const { fileURLToPath } = await import("node:url");
     // import.meta.resolve bypasses package.json exports restrictions
+    // Entry resolves to esm/ subdir; go up one level to package root, then into nodejs/
     const cedarEntryUrl = import.meta.resolve("@cedar-policy/cedar-wasm");
-    const cedarPkgPath = join(dirname(fileURLToPath(cedarEntryUrl)), "nodejs");
+    const cedarPkgPath = join(dirname(dirname(fileURLToPath(cedarEntryUrl))), "nodejs");
     const savedDirname = (globalThis as Record<string, unknown>).__dirname;
     (globalThis as Record<string, unknown>).__dirname = cedarPkgPath;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
