@@ -74,8 +74,6 @@ export type TelegramAccountConfig = {
   /** If false, do not start this Telegram account. Default: true. */
   enabled?: boolean;
   botToken?: string;
-  /** Secret reference for bot token (e.g., "ganesh:openclaw/telegram-bot-token"). */
-  botTokenRef?: string;
   /** Path to file containing bot token (for secret managers like agenix). */
   tokenFile?: string;
   /** Control reply threading when reply tags are present (off|first|all). */
@@ -187,6 +185,8 @@ export type TelegramTopicConfig = {
   allowFrom?: Array<string | number>;
   /** Optional system prompt snippet for this topic. */
   systemPrompt?: string;
+  /** If true, skip automatic voice-note transcription for mention detection in this topic. */
+  disableAudioPreflight?: boolean;
 };
 
 export type TelegramGroupConfig = {
@@ -206,6 +206,8 @@ export type TelegramGroupConfig = {
   allowFrom?: Array<string | number>;
   /** Optional system prompt snippet for this group. */
   systemPrompt?: string;
+  /** If true, skip automatic voice-note transcription for mention detection in this group. */
+  disableAudioPreflight?: boolean;
 };
 
 export type TelegramDirectConfig = {

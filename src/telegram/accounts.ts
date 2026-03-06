@@ -4,6 +4,10 @@ import type { OpenClawConfig } from "../config/config.js";
 import type { TelegramAccountConfig, TelegramActionConfig } from "../config/types.js";
 import { isTruthyEnvValue } from "../infra/env.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
+import {
+  listConfiguredAccountIds as listConfiguredAccountIdsFromSection,
+  resolveAccountWithDefaultFallback,
+} from "../plugin-sdk/account-resolution.js";
 import { resolveAccountEntry } from "../routing/account-lookup.js";
 import { listBoundAccountIds, resolveDefaultAgentBoundAccountId } from "../routing/bindings.js";
 import {
@@ -11,7 +15,7 @@ import {
   normalizeAccountId,
   normalizeOptionalAccountId,
 } from "../routing/session-key.js";
-import { resolveTelegramToken, resolveTelegramTokenAsync } from "./token.js";
+import { resolveTelegramToken } from "./token.js";
 
 const log = createSubsystemLogger("telegram/accounts");
 
@@ -37,23 +41,15 @@ export type ResolvedTelegramAccount = {
   enabled: boolean;
   name?: string;
   token: string;
-  tokenSource: "env" | "tokenFile" | "config" | "secretRef" | "none";
+  tokenSource: "env" | "tokenFile" | "config" | "none";
   config: TelegramAccountConfig;
 };
 
 function listConfiguredAccountIds(cfg: OpenClawConfig): string[] {
-  const accounts = cfg.channels?.telegram?.accounts;
-  if (!accounts || typeof accounts !== "object") {
-    return [];
-  }
-  const ids = new Set<string>();
-  for (const key of Object.keys(accounts)) {
-    if (!key) {
-      continue;
-    }
-    ids.add(normalizeAccountId(key));
-  }
-  return [...ids];
+  return listConfiguredAccountIdsFromSection({
+    accounts: cfg.channels?.telegram?.accounts,
+    normalizeAccountId,
+  });
 }
 
 export function listTelegramAccountIds(cfg: OpenClawConfig): string[] {
@@ -135,7 +131,6 @@ export function resolveTelegramAccount(params: {
   cfg: OpenClawConfig;
   accountId?: string | null;
 }): ResolvedTelegramAccount {
-  const hasExplicitAccountId = Boolean(params.accountId?.trim());
   const baseEnabled = params.cfg.channels?.telegram?.enabled !== false;
 
   const resolve = (accountId: string) => {
@@ -158,93 +153,20 @@ export function resolveTelegramAccount(params: {
     } satisfies ResolvedTelegramAccount;
   };
 
-  const normalized = normalizeAccountId(params.accountId);
-  const primary = resolve(normalized);
-  if (hasExplicitAccountId) {
-    return primary;
-  }
-  if (primary.tokenSource !== "none") {
-    return primary;
-  }
-
   // If accountId is omitted, prefer a configured account token over failing on
   // the implicit "default" account. This keeps env-based setups working while
   // making config-only tokens work for things like heartbeats.
-  const fallbackId = resolveDefaultTelegramAccountId(params.cfg);
-  if (fallbackId === primary.accountId) {
-    return primary;
-  }
-  const fallback = resolve(fallbackId);
-  if (fallback.tokenSource === "none") {
-    return primary;
-  }
-  return fallback;
+  return resolveAccountWithDefaultFallback({
+    accountId: params.accountId,
+    normalizeAccountId,
+    resolvePrimary: resolve,
+    hasCredential: (account) => account.tokenSource !== "none",
+    resolveDefaultAccountId: () => resolveDefaultTelegramAccountId(params.cfg),
+  });
 }
 
 export function listEnabledTelegramAccounts(cfg: OpenClawConfig): ResolvedTelegramAccount[] {
   return listTelegramAccountIds(cfg)
     .map((accountId) => resolveTelegramAccount({ cfg, accountId }))
     .filter((account) => account.enabled);
-}
-
-/**
- * Async version - supports secret refs (ganesh:, pass:, etc.)
- */
-export async function resolveTelegramAccountAsync(params: {
-  cfg: OpenClawConfig;
-  accountId?: string | null;
-}): Promise<ResolvedTelegramAccount> {
-  const hasExplicitAccountId = Boolean(params.accountId?.trim());
-  const baseEnabled = params.cfg.channels?.telegram?.enabled !== false;
-
-  const resolve = async (accountId: string) => {
-    const merged = mergeTelegramAccountConfig(params.cfg, accountId);
-    const accountEnabled = merged.enabled !== false;
-    const enabled = baseEnabled && accountEnabled;
-    const tokenResolution = await resolveTelegramTokenAsync(params.cfg, { accountId });
-    debugAccounts("resolveAsync", {
-      accountId,
-      enabled,
-      tokenSource: tokenResolution.source,
-    });
-    return {
-      accountId,
-      enabled,
-      name: merged.name?.trim() || undefined,
-      token: tokenResolution.token,
-      tokenSource: tokenResolution.source,
-      config: merged,
-    } satisfies ResolvedTelegramAccount;
-  };
-
-  const normalized = normalizeAccountId(params.accountId);
-  const primary = await resolve(normalized);
-  if (hasExplicitAccountId) {
-    return primary;
-  }
-  if (primary.tokenSource !== "none") {
-    return primary;
-  }
-
-  const fallbackId = resolveDefaultTelegramAccountId(params.cfg);
-  if (fallbackId === primary.accountId) {
-    return primary;
-  }
-  const fallback = await resolve(fallbackId);
-  if (fallback.tokenSource === "none") {
-    return primary;
-  }
-  return fallback;
-}
-
-/**
- * Async version - supports secret refs
- */
-export async function listEnabledTelegramAccountsAsync(
-  cfg: OpenClawConfig,
-): Promise<ResolvedTelegramAccount[]> {
-  const accounts = await Promise.all(
-    listTelegramAccountIds(cfg).map((accountId) => resolveTelegramAccountAsync({ cfg, accountId })),
-  );
-  return accounts.filter((account) => account.enabled);
 }
