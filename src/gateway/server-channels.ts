@@ -183,6 +183,7 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
             enabled: false,
             configured: true,
             running: false,
+            restartPending: false,
             lastError: plugin.config.disabledReason?.(account, cfg) ?? "disabled",
           });
           return;
@@ -198,6 +199,7 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
             enabled: true,
             configured: false,
             running: false,
+            restartPending: false,
             lastError: plugin.config.unconfiguredReason?.(account, cfg) ?? "not configured",
           });
           return;
@@ -218,6 +220,7 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
           enabled: true,
           configured: true,
           running: true,
+          restartPending: false,
           lastStartAt: Date.now(),
           lastError: null,
           reconnectAttempts: preserveRestartAttempts ? (restartAttempts.get(rKey) ?? 0) : 0,
@@ -255,6 +258,11 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
             const attempt = (restartAttempts.get(rKey) ?? 0) + 1;
             restartAttempts.set(rKey, attempt);
             if (attempt > MAX_RESTART_ATTEMPTS) {
+              setRuntime(channelId, id, {
+                accountId: id,
+                restartPending: false,
+                reconnectAttempts: attempt,
+              });
               log.error?.(`[${id}] giving up after ${MAX_RESTART_ATTEMPTS} restart attempts`);
               return;
             }
@@ -264,6 +272,7 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
             );
             setRuntime(channelId, id, {
               accountId: id,
+              restartPending: true,
               reconnectAttempts: attempt,
             });
             try {
@@ -352,6 +361,7 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
         setRuntime(channelId, id, {
           accountId: id,
           running: false,
+          restartPending: false,
           lastStopAt: Date.now(),
         });
       }),
@@ -380,6 +390,7 @@ export function createChannelManager(opts: ChannelManagerOptions): ChannelManage
     const next: ChannelAccountSnapshot = {
       accountId: resolvedId,
       running: false,
+      restartPending: false,
       lastError: cleared ? "logged out" : current.lastError,
     };
     if (typeof current.connected === "boolean") {
