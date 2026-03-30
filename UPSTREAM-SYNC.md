@@ -3,34 +3,108 @@
 Our fork: `ankur-basiq360/openclaw`  
 Upstream: `openclaw/openclaw`
 
+## ⚠️ Critical Rules
+
+1. **ALWAYS use `pnpm`** — not npm! The project declares `packageManager: pnpm@10.23.0`
+   - `npm install` creates a flat node_modules layout incompatible with the build
+   - If you accidentally ran npm: `rm -rf node_modules && pnpm install`
+2. **Re-apply exec patch after every build**: `~/bin/fix-openclaw-exec.sh`
+3. **Reinstall cedar-wasm after clean install**: `pnpm add @cedar-policy/cedar-wasm`
+4. **Back up dist/ before merging**: `cp -r dist/ dist-backup-$(openclaw --version | awk '{print $2}')/`
+
 ## Merge Workflow
 
 ```bash
+# 1. Backup
+cp -r dist/ dist-backup-$(date +%Y%m%d)/
+
+# 2. Fetch & merge
 git fetch upstream
 git merge upstream/main
-# resolve any conflicts (see custom commits below)
-npm install
-npm run build
-# test locally, then:
+# Resolve conflicts (see conflict guide below)
+
+# 3. Build (MUST use pnpm)
+pnpm install
+pnpm add @cedar-policy/cedar-wasm      # our custom dep, not in upstream package.json
+pnpm run build
+
+# 4. Post-build patches
+~/bin/fix-openclaw-exec.sh              # exec security default: allowlist → full
+
+# 5. Smoke test
+node -e "console.log('build OK')"
+openclaw --version
+
+# 6. Deploy
 sudo systemctl restart openclaw
+openclaw status
 ```
+
+## Conflict Resolution Guide
+
+### Always take upstream (we don't use these)
+
+- `extensions/feishu/` — Feishu/Lark channel (not used)
+
+### Keep our additions, merge with upstream
+
+- `src/channels/plugins/types.adapters.ts` — keep `resolveAccountAsync`, add upstream's new fields
+- `src/gateway/server-channels.ts` — keep async account resolution fallback
+- `extensions/telegram/src/channel.ts` — check if upstream now handles SecretRef natively (as of 3.8, it does via `normalizeResolvedSecretInputString`)
+
+### Take upstream, verify compat
+
+- `src/agents/auth-profiles/order.ts` — upstream refactors frequently, take theirs, verify secrets backend
+- `src/agents/bash-tools.exec.ts` — our policy gate import must survive (line ~6)
+
+### Our custom files (should never conflict)
+
+- `src/infra/ganesh-policy-gate.ts` — Cedar policy evaluation
+- `src/infra/ganesh-cedar-engine.ts` — Cedar WASM engine
+- `src/secrets/backends/ganesh.ts` — Ganesh vault backend
+- `src/secrets/types.ts` — secrets type definitions
 
 ## Our Custom Commits
 
-These are the commits we've added on top of upstream — watch for conflicts here:
+### Security (Cedar Policy Gate)
 
-- `4e8da77d8` fix: resolve build errors - import paths and type mismatches
-- `3c25289d2` fix: clean up unused imports and variables
-- `74f115cde` fix: remove duplicate imports in telegram/bot.ts
-- `0a9cdf87e` Merge branch 'feature/ganesh-secrets'
-- `a3df38b4a` feat(secrets): Support mode-based tier overrides in Ganesh backend
-- `7c3d45ea8` Merge feature/secrets-backend: Ganesh vault + Tier 3 MFA
-- `46231bf1b` feat(secrets): Add TOTP verification step to MFA flow
-- `96c9eb1f0` feat(secrets): Switch MFA to inline buttons
+- `f74f39437` feat: add Ganesh policy gate for exec tool
+- `96a2b0963` feat: Cedar policy engine for command execution
+- `81c844934` feat: tiered agent permissions via Cedar RBAC
+- `b63475bbc` feat: policies.d/ directory for modular Cedar policies
+- `6166e03e4` fix: Cedar WASM - resolve to package root then nodejs/ subdir (+ 4 related fixes)
+
+### Secrets Backend (Ganesh Vault)
+
+- `864f99c5d` feat(secrets): add pluggable secrets backend infrastructure
 - `4dc26da7c` feat(secrets): Add Tier 3 MFA support to Ganesh backend
+- `96c9eb1f0` feat(secrets): Switch MFA to inline buttons
+- `a3df38b4a` feat(secrets): Support mode-based tier overrides
+- `c0ef0479b` feat: wire credential broker into ganesh secrets backend
 
-### Key files to watch during merges
+### Merge History
 
-- `src/secrets/` — our ganesh backend lives here
-- `src/secrets/backends/ganesh.ts` — main ganesh secrets integration
-- `src/secrets/backends/ganesh.test.ts` — tests
+- `a452c73b7` merge: upstream v2026.3.2 (Mar 5, 2026)
+- `93fbd4722` merge: upstream v2026.3.8 (Mar 9, 2026) — 5 conflicts, all resolved
+
+## Post-Build Patch: fix-openclaw-exec.sh
+
+The bundler sometimes overrides our `tools.exec.security: "full"` config with the default `"allowlist"`. The patch script sed-replaces this in the dist chunks. **Must run after every build.**
+
+If the pattern changes in future builds, update `~/bin/fix-openclaw-exec.sh`.
+
+## Revert Script
+
+If anything goes wrong after upgrade:
+
+```bash
+bash ~/bin/revert-openclaw.sh
+```
+
+This restores the previous dist/ backup and restarts OpenClaw.
+
+## Known Issues
+
+- **npm vs pnpm**: Using `npm install` instead of `pnpm install` was the #1 post-merge failure (Mar 9 upgrade). The flat node_modules layout breaks pnpm-native build scripts.
+- **@cedar-policy/cedar-wasm**: Not in upstream's package.json. Must be explicitly added after clean installs.
+- **Doctor warnings about safeBins profiles**: Cosmetic (new in 3.7+). Our safeBins work fine, they just lack the new "profile" metadata.
