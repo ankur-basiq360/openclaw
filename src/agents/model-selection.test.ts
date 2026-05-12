@@ -14,6 +14,7 @@ import {
   resolveConfiguredModelRef,
   resolveThinkingDefault,
   resolveModelRefFromString,
+  resolveSubagentConfiguredModelSelection,
 } from "./model-selection.js";
 
 const EXPLICIT_ALLOWLIST_CONFIG = {
@@ -795,6 +796,23 @@ describe("model-selection", () => {
         }),
       ).toBe("adaptive");
     });
+  });
+});
+
+describe("resolveSubagentConfiguredModelSelection", () => {
+  it("canonicalizes bare configured Anthropic models to fully-qualified refs", () => {
+    const cfg = {
+      agents: {
+        defaults: {
+          model: { primary: "openai-codex/gpt-5.4" },
+          subagents: { model: "claude-sonnet-4-20250514" },
+        },
+      },
+    } as OpenClawConfig;
+
+    expect(resolveSubagentConfiguredModelSelection({ cfg, agentId: "main" })).toBe(
+      "anthropic/claude-sonnet-4-20250514",
+    );
   });
 });
 

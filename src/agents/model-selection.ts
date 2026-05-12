@@ -432,11 +432,27 @@ export function resolveSubagentConfiguredModelSelection(params: {
   agentId: string;
 }): string | undefined {
   const agentConfig = resolveAgentConfig(params.cfg, params.agentId);
-  return (
+  const rawSelection =
     normalizeModelSelection(agentConfig?.subagents?.model) ??
     normalizeModelSelection(params.cfg.agents?.defaults?.subagents?.model) ??
-    normalizeModelSelection(agentConfig?.model)
-  );
+    normalizeModelSelection(agentConfig?.model);
+  if (!rawSelection) {
+    return undefined;
+  }
+
+  const aliasIndex = buildModelAliasIndex({
+    cfg: params.cfg,
+    defaultProvider: DEFAULT_PROVIDER,
+  });
+  const resolved = resolveModelRefFromString({
+    raw: rawSelection,
+    defaultProvider: DEFAULT_PROVIDER,
+    aliasIndex,
+  });
+  if (!resolved) {
+    return rawSelection;
+  }
+  return `${resolved.ref.provider}/${resolved.ref.model}`;
 }
 
 export function resolveSubagentSpawnModelSelection(params: {
