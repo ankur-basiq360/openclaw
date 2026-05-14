@@ -139,11 +139,19 @@ export function buildGatewayConnectionDetails(
     urlSource?: "cli" | "env";
   } = {},
 ): GatewayConnectionDetails {
-  return buildGatewayConnectionDetailsWithResolvers(options, {
-    loadConfig: () => loadGatewayConfig(),
-    resolveConfigPath: (env) => resolveGatewayConfigPath(env),
-    resolveGatewayPort: (config, env) => resolveGatewayPortValue(config, env),
-  });
+  const useInjectedResolvers =
+    typeof gatewayCallDeps.loadConfig === "function" &&
+    typeof gatewayCallDeps.resolveConfigPath === "function" &&
+    typeof gatewayCallDeps.resolveGatewayPort === "function" &&
+    typeof gatewayCallDeps.resolveStateDir === "function";
+
+  return useInjectedResolvers
+    ? buildGatewayConnectionDetailsWithResolvers(options, {
+        loadConfig: () => loadGatewayConfig(),
+        resolveConfigPath: (env) => resolveGatewayConfigPath(env),
+        resolveGatewayPort: (config, env) => resolveGatewayPortValue(config, env),
+      })
+    : buildGatewayConnectionDetailsWithResolvers(options);
 }
 
 export const __testing = {

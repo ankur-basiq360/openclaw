@@ -462,6 +462,28 @@ describe("applyPluginAutoEnable", () => {
     expect(result.changes).toContain("xai web search configured, enabled automatically.");
   });
 
+  it("auto-enables bundled provider plugins when direct tools.web.search config exists", () => {
+    const result = applyPluginAutoEnable({
+      config: {
+        tools: {
+          web: {
+            search: {
+              enabled: true,
+              provider: "gemini",
+              gemini: {
+                apiKey: "gemini-runtime-key",
+              },
+            },
+          },
+        },
+      },
+      env: {},
+    });
+
+    expect(result.config.plugins?.entries?.google?.enabled).toBe(true);
+    expect(result.changes).toContain("google web search configured, enabled automatically.");
+  });
+
   it("auto-enables xai when the plugin-owned x_search tool is configured", () => {
     const result = applyPluginAutoEnable({
       config: {

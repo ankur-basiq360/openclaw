@@ -10,6 +10,7 @@ import {
   BUNDLED_AUTO_ENABLE_PROVIDER_PLUGIN_IDS,
   BUNDLED_PLUGIN_CONTRACT_SNAPSHOTS,
 } from "../plugins/bundled-capability-metadata.js";
+import { resolveBundledWebSearchPluginId } from "../plugins/bundled-web-search-provider-ids.js";
 import {
   loadPluginManifestRegistry,
   type PluginManifestRegistry,
@@ -137,6 +138,22 @@ function isProviderConfigured(cfg: OpenClawConfig, providerId: string): boolean 
     }
   }
 
+  const webSearch = cfg.tools?.web?.search as Record<string, unknown> | undefined;
+  if (isRecord(webSearch)) {
+    const configuredProvider =
+      typeof webSearch.provider === "string" ? normalizeProviderId(webSearch.provider) : "";
+    if (configuredProvider === normalized) {
+      return true;
+    }
+    if (normalized === "brave" && "apiKey" in webSearch) {
+      return true;
+    }
+    const providerSearchConfig = webSearch[normalized];
+    if (isRecord(providerSearchConfig) && Object.keys(providerSearchConfig).length > 0) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -146,6 +163,34 @@ function hasPluginOwnedWebSearchConfig(cfg: OpenClawConfig, pluginId: string): b
     return false;
   }
   return isRecord(pluginConfig.webSearch);
+}
+
+function hasDirectBundledWebSearchConfig(cfg: OpenClawConfig, pluginId: string): boolean {
+  const search = cfg.tools?.web?.search as Record<string, unknown> | undefined;
+  if (!isRecord(search)) {
+    return false;
+  }
+
+  const configuredProvider =
+    typeof search.provider === "string" ? search.provider.trim().toLowerCase() : "";
+  if (configuredProvider && resolveBundledWebSearchPluginId(configuredProvider) === pluginId) {
+    return true;
+  }
+
+  if ("apiKey" in search && resolveBundledWebSearchPluginId("brave") === pluginId) {
+    return true;
+  }
+
+  return Object.entries(search).some(([key, value]) => {
+    if (key === "enabled" || key === "provider" || key === "apiKey") {
+      return false;
+    }
+    return (
+      isRecord(value) &&
+      Object.keys(value).length > 0 &&
+      resolveBundledWebSearchPluginId(key) === pluginId
+    );
+  });
 }
 
 function hasPluginOwnedToolConfig(cfg: OpenClawConfig, pluginId: string): boolean {
@@ -337,6 +382,9 @@ function configMayNeedPluginAutoEnable(cfg: OpenClawConfig, env: NodeJS.ProcessE
   if (collectModelRefs(cfg).length > 0) {
     return true;
   }
+  if (isRecord(cfg.tools?.web?.search as Record<string, unknown> | undefined)) {
+    return true;
+  }
   if (isRecord(cfg.tools?.web?.x_search as Record<string, unknown> | undefined)) {
     return true;
   }
@@ -430,7 +478,10 @@ function resolveConfiguredPlugins(
     }
   }
   for (const pluginId of resolveProviderPluginsWithOwnedWebSearch(registry)) {
-    if (hasPluginOwnedWebSearchConfig(cfg, pluginId)) {
+    if (
+      hasDirectBundledWebSearchConfig(cfg, pluginId) ||
+      hasPluginOwnedWebSearchConfig(cfg, pluginId)
+    ) {
       changes.push({
         pluginId,
         reason: `${pluginId} web search configured`,
