@@ -108,3 +108,24 @@ This restores the previous dist/ backup and restarts OpenClaw.
 - **npm vs pnpm**: Using `npm install` instead of `pnpm install` was the #1 post-merge failure (Mar 9 upgrade). The flat node_modules layout breaks pnpm-native build scripts.
 - **@cedar-policy/cedar-wasm**: Not in upstream's package.json. Must be explicitly added after clean installs.
 - **Doctor warnings about safeBins profiles**: Cosmetic (new in 3.7+). Our safeBins work fine, they just lack the new "profile" metadata.
+
+## Merge 2026.6.6 (2026-06-10) — branch merge/upstream-2026.6.6, commit 30538c67dd1
+
+Conflicts (7), all resolved:
+- pnpm-lock.yaml, package.json — upstream + re-added postbuild(fix-bundler-circular-deps) + @cedar-policy/cedar-wasm
+- src/agents/bash-tools.exec.ts — upstream + reinserted Cedar policy gate (import + deny block)
+- src/agents/model-selection.ts — TOOK UPSTREAM (includeAgentPrimary replaces our subagent-ref canonicalization; REGRESSION-TEST subagent model resolution)
+- src/config/plugin-auto-enable.ts + .test.ts — TOOK UPSTREAM (split into modules; .test.ts deleted upstream; our auto-enable fix absorbed)
+- src/gateway/call.ts — TOOK UPSTREAM (resolver injection went native)
+
+Build: pnpm install --no-frozen-lockfile (lockfile needed cedar-wasm); pnpm add cedar-wasm 4.10.0;
+node scripts/tsdown-build.mjs + runtime-postbuild.mjs → OK. `node dist/index.js --version` = OpenClaw 2026.6.2 (30538c6).
+Cedar gate confirmed in dist/bash-tools-*.js.
+
+⚠ EXEC PATCH FINDING: ~/bin/fix-openclaw-exec.sh referenced here is MISSING on disk. dist still contains
+`security: "allowlist"` (4 sites in commands-handlers.runtime). BUT live openclaw.json sets `"security":"full"`
+explicitly (config-level). Whether the dist default matters at runtime is a REGRESSION-TEST item for the
+appliance phase — do NOT assume the post-build sed is still needed or still missing-critical until exec
+behavior is verified live. This was merge-assessment risk #1.
+
+Delta extracted as patch series → ganesh-appliance/patches/ (D6, fork now "upstream + patches").
