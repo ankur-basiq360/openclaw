@@ -5,6 +5,8 @@
  * the appropriate backend.
  */
 
+import { GaneshBackend } from "./backends/ganesh.js";
+import { PassBackend } from "./backends/pass.js";
 import type {
   SecretsBackend,
   SecretsBackendConfig,
@@ -12,8 +14,6 @@ import type {
   SecretRef,
   SecretResolutionResult,
 } from "./types.js";
-import { GaneshBackend } from "./backends/ganesh.js";
-import { PassBackend } from "./backends/pass.js";
 
 // In-memory cache for resolved secrets (per-process lifetime)
 const secretsCache = new Map<string, { value: string; resolvedAt: number }>();
@@ -94,7 +94,7 @@ export function createBackend(config: SecretsBackendConfig): SecretsBackend {
       // File backend is the default (no external resolution needed)
       throw new Error("File backend does not support resolution");
     default:
-      throw new Error(`Unknown secrets backend: ${config.backend}`);
+      throw new Error(`Unknown secrets backend: ${String(config.backend)}`);
   }
 }
 

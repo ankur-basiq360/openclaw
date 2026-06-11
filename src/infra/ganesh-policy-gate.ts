@@ -114,7 +114,7 @@ function loadPolicy(): PolicyConfig | null {
     cachedPolicyMtime = stat.mtimeMs;
     return cachedPolicy;
   } catch (err) {
-    logWarn(`ganesh-policy-gate: failed to load policy: ${err}`);
+    logWarn(`ganesh-policy-gate: failed to load policy: ${String(err)}`);
     return null;
   }
 }
@@ -202,7 +202,7 @@ export async function evaluateCommand(
     try {
       return await evaluateCommandCedar(command, opts);
     } catch (err) {
-      logWarn(`ganesh-policy-gate: Cedar evaluation failed, falling back to JSON: ${err}`);
+      logWarn(`ganesh-policy-gate: Cedar evaluation failed, falling back to JSON: ${String(err)}`);
       // Fall through to JSON engine
     }
   }
@@ -217,13 +217,13 @@ export async function evaluateCommand(
     policy = loadPolicy();
   } catch (err) {
     // Fail-open
-    logWarn(`ganesh-policy-gate: error loading policy, failing open: ${err}`);
+    logWarn(`ganesh-policy-gate: error loading policy, failing open: ${String(err)}`);
     writeAudit({
       timestamp: now,
       event: "policy_gate_check",
       command,
       decision: "allow",
-      reason: `Fail-open: policy load error: ${err}`,
+      reason: `Fail-open: policy load error: ${String(err)}`,
       agentId: opts?.agentId,
       sessionKey: opts?.sessionKey,
       host: opts?.host,
@@ -361,7 +361,7 @@ function ensureAuditDir(): boolean {
     auditDirChecked = true;
     return true;
   } catch (err) {
-    logWarn(`ganesh-policy-gate: cannot create audit dir: ${err}`);
+    logWarn(`ganesh-policy-gate: cannot create audit dir: ${String(err)}`);
     return false;
   }
 }
@@ -376,7 +376,7 @@ function writeAudit(entry: AuditEntry): void {
     fs.appendFileSync(auditFile, JSON.stringify(entry) + "\n", { mode: 0o600 });
   } catch (err) {
     // Never let audit failures block execution
-    logWarn(`ganesh-policy-gate: audit write failed: ${err}`);
+    logWarn(`ganesh-policy-gate: audit write failed: ${String(err)}`);
   }
 }
 

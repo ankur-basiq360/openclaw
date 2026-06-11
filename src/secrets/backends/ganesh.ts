@@ -18,8 +18,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { GaneshBackendConfig, SecretsBackend } from "../types.js";
 import { logInfo, logWarn } from "../../logger.js";
+import type { GaneshBackendConfig, SecretsBackend } from "../types.js";
 
 const execAsync = promisify(exec);
 
@@ -780,7 +780,7 @@ export class GaneshBackend implements SecretsBackend {
       this.unlocked = true;
       return true;
     } catch (error) {
-      logWarn(`[secrets:ganesh] Failed to unlock vault: ${error}`);
+      logWarn(`[secrets:ganesh] Failed to unlock vault: ${String(error)}`);
       return false;
     }
   }
@@ -982,7 +982,7 @@ export class GaneshBackend implements SecretsBackend {
 
       return true;
     } catch (error) {
-      logWarn(`[secrets:ganesh] Failed to store secret: ${error}`);
+      logWarn(`[secrets:ganesh] Failed to store secret: ${String(error)}`);
       return false;
     }
   }

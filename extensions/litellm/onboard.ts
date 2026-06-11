@@ -5,7 +5,7 @@ import {
 } from "openclaw/plugin-sdk/provider-onboard";
 
 export const LITELLM_BASE_URL = "http://localhost:4000";
-export const LITELLM_DEFAULT_MODEL_ID = "claude-opus-4-6";
+export const LITELLM_DEFAULT_MODEL_ID = "claude-opus-4-7";
 export const LITELLM_DEFAULT_MODEL_REF = `litellm/${LITELLM_DEFAULT_MODEL_ID}`;
 const LITELLM_DEFAULT_CONTEXT_WINDOW = 128_000;
 const LITELLM_DEFAULT_MAX_TOKENS = 8_192;
