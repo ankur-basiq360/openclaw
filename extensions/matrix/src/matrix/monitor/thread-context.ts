@@ -1,3 +1,4 @@
+// Matrix plugin module implements thread context behavior.
 import type { MatrixClient } from "../sdk.js";
 import { summarizeMatrixMessageContextEvent, trimMatrixMaybeString } from "./context-summary.js";
 import type { MatrixRawEvent } from "./types.js";
@@ -7,6 +8,7 @@ const MAX_THREAD_STARTER_BODY_LENGTH = 500;
 
 type MatrixThreadContext = {
   threadStarterBody?: string;
+  senderId?: string;
   senderLabel?: string;
   summary?: string;
 };
@@ -73,7 +75,7 @@ export function createMatrixThreadContextResolver(params: {
 
     const rootEvent = await params.client
       .getEvent(input.roomId, input.threadRootId)
-      .catch((err) => {
+      .catch((err: unknown) => {
         params.logVerboseMessage(
           `matrix: failed resolving thread root room=${input.roomId} id=${input.threadRootId}: ${String(err)}`,
         );
@@ -99,6 +101,7 @@ export function createMatrixThreadContextResolver(params: {
         senderName,
         summary,
       }),
+      senderId,
       senderLabel,
       summary,
     });
